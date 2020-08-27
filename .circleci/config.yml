@@ -1,0 +1,55 @@
+version: 2.1
+
+jobs:
+    build:
+        working_directory: ~/circleci-sqlitecache
+        docker:
+            - image: circleci/python:3.8.5
+              environment:
+                PIPENV_VENV_IN_PROJECT: true
+                GIT_LFS_SKIP_SMUDGE: 1
+        steps:
+            - run:
+                command: |
+                    sudo apt install git-lfs
+                    git lfs install
+            - checkout
+            - run: sudo chown -R circleci:circleci /usr/local/bin
+            - run: sudo chown -R circleci:circleci /usr/local/lib/python3.8/site-packages
+            - run: |
+                git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-idents
+            - restore_cache:
+                key: v1-lfs-{{ .Branch }}-{{ checksum ".lfs-idents" }}
+            - run: |
+                git lfs pull
+            - save_cache:
+                key: v1-lfs-{{ .Branch }}-{{ checksum ".lfs-idents" }}
+                paths:
+                    - .git/lfs
+            - restore_cache:
+                key: deps9-{{ .Branch }}-{{ checksum "Pipfile.lock" }}
+            - run:
+                command: |
+                    sudo pip install pipenv
+                    pipenv install --dev
+            - save_cache: # cache Python dependencies using checksum of Pipfile as the cache-key
+                key: deps9-{{ .Branch }}-{{ checksum "Pipfile.lock" }}
+                paths:
+                    - "venv"
+            - run:
+                command: |
+                    mkdir -p ~/circleci-sqlitecache/test-results
+                    mkdir -p ~/circleci-sqlitecache/test-results/unittest
+                    mkdir -p ~/circleci-sqlitecache/test-results/flake8
+            - run:
+                command: |
+                    pipenv run ./test_harness.py --output ~/circleci-sqlitecache/test-results/unittest
+            - run:
+                command: |
+                    pipenv run flake8 --extend-exclude .venv/ --tee --output ~/circleci-sqlitecache/test-results/flake8/flake8.txt || true
+                    pipenv run flake8_junit ~/circleci-sqlitecache/test-results/flake8/flake8.txt ~/circleci-sqlitecache/test-results/flake8/flake8_junit.xml
+            - store_test_results:
+                path: ~/circleci-sqlitecache/test-results
+            - store_artifacts:
+                path: ~/circleci-sqlitecache/test-results
+                destination: tr1

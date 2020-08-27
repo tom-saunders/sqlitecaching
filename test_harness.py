@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+
+import argparse
+import sys
+import unittest
+
+import xmlrunner
+
+
+def handle_arguments():
+    argparser = argparse.ArgumentParser(
+        description="Harness to run testing covering sqlitecaching functionality."
+    )
+    argparser.add_argument("-v", "--verbose", action="count", default=1, required=False)
+    argparser.add_argument(
+        "-o", "--output", default="test-reports", type=str, required=False
+    )
+
+    args = argparser.parse_args()
+    return args
+
+
+if __name__ == "__main__":
+    args = handle_arguments()
+    unittest.main(
+        module=None,
+        argv=[sys.argv[0]],
+        testRunner=xmlrunner.XMLTestRunner(output=args.output),
+        verbosity=args.verbose,
+    )
