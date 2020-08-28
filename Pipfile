@@ -4,15 +4,15 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-unittest-xml-reporting = "*"
-flake8 = "*"
-flake8-junit-report = "*"
-pre-commit = "*"
+unittest-xml-reporting = "~=3.0"
+flake8 = "~=3.8"
+flake8-junit-report = "~=2.1"
+pre-commit = "~=2.7"
 black = "==19.10b0"
-isort = "*"
+isort = "~=5.4"
 
 [packages]
-ordered-enum = "*"
+ordered-enum = "~=0.0"
 
 [requires]
 python_version = "3.8"
