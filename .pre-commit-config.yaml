@@ -26,3 +26,11 @@ repos:
     rev: 5.4.2
     hooks:
     -   id: isort
+-   repo: local
+    hooks:
+    -   id: unittest
+        name: unittest
+        entry: env PIPENV_IGNORE_VIRTUALENVS=1 pipenv run ./test_harness.py
+        language: python
+        always_run: True
+        exclude: '^.*$'

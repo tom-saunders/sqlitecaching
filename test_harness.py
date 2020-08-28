@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
 import sys
 import unittest
 
@@ -13,10 +14,12 @@ def handle_arguments():
     )
     argparser.add_argument("-v", "--verbose", action="count", default=1, required=False)
     argparser.add_argument(
-        "-o", "--output", default="test-reports", type=str, required=False
+        "-o", "--output", default="test-reports/", type=str, required=False
     )
 
     args = argparser.parse_args()
+    if not os.path.isdir(args.output):
+        os.makedirs(args.output)
     return args
 
 
