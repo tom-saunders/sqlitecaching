@@ -12,6 +12,7 @@ black = "==19.10b0"
 isort = "*"
 
 [packages]
+ordered-enum = "*"
 
 [requires]
 python_version = "3.8"
