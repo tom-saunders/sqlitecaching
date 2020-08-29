@@ -16,7 +16,11 @@ def handle_arguments():
     )
     argparser.add_argument("-v", "--verbose", action="count", default=1, required=False)
     argparser.add_argument(
-        "-o", "--output", default="test-reports/", type=str, required=False
+        "-o",
+        "--output-dir",
+        default="./test-reports/unittest/",
+        type=str,
+        required=False,
     )
     argparser.add_argument(
         "-l",
@@ -28,15 +32,28 @@ def handle_arguments():
     argparser.add_argument(
         "-t", "--text", action="store_true",
     )
+    argparser.add_argument(
+        "-L",
+        "--log-level",
+        default="notset",
+        type=str,
+        choices=tests.TestLogLevel.values(),
+    )
 
     args = argparser.parse_args()
-    if not os.path.isdir(args.output):
-        os.makedirs(args.output)
-    tests.set_test_level(args.level)
+
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+    tests.Config.set_output_dir(args.output_dir)
+
     if args.text:
         args.testrunner = unittest.TextTestRunner()
     else:
-        args.testrunner = xmlrunner.XMLTestRunner(output=args.output)
+        args.testrunner = xmlrunner.XMLTestRunner(output=args.output_dir)
+
+    tests.Config.set_test_level(args.level)
+    tests.Config.set_log_level(args.log_level)
+
     return args
 
 

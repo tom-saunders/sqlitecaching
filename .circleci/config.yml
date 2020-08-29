@@ -43,7 +43,7 @@ jobs:
                     mkdir -p ~/circleci-sqlitecache/test-results/flake8
             - run:
                 command: |
-                    pipenv run ./test_harness.py --output ~/circleci-sqlitecache/test-results/unittest
+                    pipenv run ./test_harness.py --output-dir ~/circleci-sqlitecache/test-results/unittest
             - run:
                 command: |
                     pipenv run flake8 --extend-exclude .venv/ --tee --output ~/circleci-sqlitecache/test-results/flake8/flake8.txt || true
