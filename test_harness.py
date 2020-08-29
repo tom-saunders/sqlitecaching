@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import os
 import sys
 import unittest
@@ -8,6 +9,7 @@ import unittest
 import xmlrunner
 
 import tests
+from sqlitecaching.enums import LogLevel
 
 
 def handle_arguments():
@@ -23,36 +25,56 @@ def handle_arguments():
         required=False,
     )
     argparser.add_argument(
+        "--text", action="store_true",
+    )
+
+    argparser.add_argument(
         "-l",
-        "--level",
+        "--log-level",
+        default="warning",
+        type=str,
+        choices=[level.casefold() for level in LogLevel.values()],
+    )
+    argparser.add_argument(
+        "-t",
+        "--test-level",
         default="pre-commit",
         type=str,
         choices=tests.TestLevel.values(),
     )
     argparser.add_argument(
-        "-t", "--text", action="store_true",
+        "-T",
+        "--test-log-level",
+        default="warning",
+        type=str,
+        choices=[level.casefold() for level in LogLevel.values()],
     )
     argparser.add_argument(
-        "-L",
-        "--log-level",
-        default="notset",
-        type=str,
-        choices=tests.TestLogLevel.values(),
+        "-O", "--log-output-dir", default=None, type=str, required=False,
     )
 
     args = argparser.parse_args()
 
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
-    tests.Config.set_output_dir(args.output_dir)
+    tests.config.set_output_dir(args.output_dir)
+    root_logger = logging.getLogger("")
+    root_log_path = f"{args.output_dir}/test_handler.log"
+    root_handler = logging.FileHandler(root_log_path)
+    root_handler.setLevel(LogLevel.convert(args.log_level).value[1])
+    root_logger.addHandler(root_handler)
+
+    if not args.log_output_dir:
+        args.log_output_dir = args.output_dir
+    tests.config.set_log_dir(args.log_output_dir)
 
     if args.text:
         args.testrunner = unittest.TextTestRunner()
     else:
         args.testrunner = xmlrunner.XMLTestRunner(output=args.output_dir)
 
-    tests.Config.set_test_level(args.level)
-    tests.Config.set_log_level(args.log_level)
+    tests.config.set_test_level(args.test_level)
+    tests.config.set_log_level(args.test_log_level)
 
     return args
 

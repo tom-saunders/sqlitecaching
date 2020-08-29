@@ -128,7 +128,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Vim recovery files
-.*.swp
-
 test-reports/
