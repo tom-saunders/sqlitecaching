@@ -1,6 +1,11 @@
 import logging
+import time
 
 from sqlitecaching.enums import LogLevel
+
+
+class UTCFormatter(logging.Formatter):
+    converter = time.gmtime
 
 
 class Config:
@@ -59,6 +64,13 @@ class Config:
             log_handler = logging.FileHandler(log_path)
             log_handler.setLevel(log_level.value[1])
 
+            log_format = (
+                "%(asctime)s %(levelname)s [%(name)s] %(funcName)s"
+                + "[%(filename)s:%(lineno)d] -  %(message)s"
+            )
+            log_formatter = UTCFormatter(log_format)
+            log_handler.setFormatter(log_formatter)
+
             self.logger.addHandler(log_handler)
             self._log_handlers.append(log_handler)
 
@@ -80,6 +92,13 @@ class Config:
 
             debug_handler = logging.FileHandler(debug_path)
             debug_handler.setLevel(debug_level.value[1])
+
+            debug_format = (
+                "%(asctime)s %(levelname)s [%(name)s] %(funcName)s"
+                + "[%(filename)s:%(lineno)d] - %(message)s"
+            )
+            debug_formatter = UTCFormatter(debug_format)
+            debug_handler.setFormatter(debug_formatter)
 
             self.logger.addHandler(debug_handler)
             self._log_handlers.append(debug_handler)
