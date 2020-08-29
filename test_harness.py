@@ -7,7 +7,7 @@ import unittest
 
 import xmlrunner
 
-import sqlitecaching
+import tests
 
 
 def handle_arguments():
@@ -23,13 +23,20 @@ def handle_arguments():
         "--level",
         default="pre-commit",
         type=str,
-        choices=sqlitecaching.TestLevel.values(),
+        choices=tests.TestLevel.values(),
+    )
+    argparser.add_argument(
+        "-t", "--text", action="store_true",
     )
 
     args = argparser.parse_args()
     if not os.path.isdir(args.output):
         os.makedirs(args.output)
-    sqlitecaching.set_test_level(args.level)
+    tests.set_test_level(args.level)
+    if args.text:
+        args.testrunner = unittest.TextTestRunner()
+    else:
+        args.testrunner = xmlrunner.XMLTestRunner(output=args.output)
     return args
 
 
@@ -38,6 +45,6 @@ if __name__ == "__main__":
     unittest.main(
         module=None,
         argv=[sys.argv[0]],
-        testRunner=xmlrunner.XMLTestRunner(output=args.output),
+        testRunner=args.testrunner,
         verbosity=args.verbose,
     )
