@@ -22,7 +22,7 @@ class Config(MinimalConfig):
         self,
         *args,
         log_ident,
-        log_file_name="main",
+        log_file_name,
         output_dir=None,
         log_dir=None,
         log_level=LogLevel.NOTSET,
@@ -73,7 +73,7 @@ class Config(MinimalConfig):
                 debug_handler = logging.FileHandler(debug_log_path)
                 debug_handler.setLevel(logging.DEBUG)
                 logger.addHandler(debug_handler)
-                handlers.append(handler)
+                handlers.append(debug_handler)
                 logger.debug(f"configured debug handler: {debug_handler}")
         self._log_handlers = (logger, handlers)
 

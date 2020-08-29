@@ -80,6 +80,7 @@ def handle_arguments():
 
 
 if __name__ == "__main__":
+    logging.getLogger("").setLevel(logging.DEBUG)
     args = handle_arguments()
     unittest.main(
         module=None,

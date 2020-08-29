@@ -30,7 +30,12 @@ class Config(BaseConfig):
         self._output_dir = output_dir
 
 
-config = Config(log_ident="tests", parent_config=sqlitecaching.config, debug_log=True)
+config = Config(
+    log_ident="tests",
+    log_file_name="tests",
+    parent_config=sqlitecaching.config,
+    debug_log=True,
+)
 _logger = config.get_sub_logger("__init__")
 
 
