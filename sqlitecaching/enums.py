@@ -1,8 +1,9 @@
-import enum
 import logging
 
+import ordered_enum
 
-class LogLevel(enum.Enum):
+
+class LogLevel(ordered_enum.OrderedEnum):
     NOTSET = ("NOTSET", logging.NOTSET)
     DEBUG = ("DEBUG", logging.DEBUG)
     INFO = ("INFO", logging.INFO)

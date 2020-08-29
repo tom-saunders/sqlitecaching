@@ -1,7 +1,6 @@
 import functools
 import unittest
 
-import sqlitecaching
 from sqlitecaching.config import Config as BaseConfig
 from tests.enums import TestLevel
 
@@ -23,19 +22,11 @@ class Config(BaseConfig):
     def get_test_level(self):
         return self._test_level
 
-    def get_output_dir(self):
-        return self._output_dir
-
     def set_output_dir(self, output_dir):
         self._output_dir = output_dir
 
 
-config = Config(
-    log_ident="tests",
-    log_file_name="tests",
-    parent_config=sqlitecaching.config,
-    debug_log=True,
-)
+config = Config(log_ident=__name__,)
 _logger = config.get_sub_logger("__init__")
 
 
@@ -48,11 +39,11 @@ def test_level(level):
         _logger.debug(f"decorator_test_level: {config.get_test_level()}")
         _logger.debug(f"decorator_test_level: {config.get_test_level() < level}")
 
-        @functools.wraps(func)
         @unittest.skipIf(
             config.get_test_level() < level,
             f"Skipping test configured at level {level}",
         )
+        @functools.wraps(func)
         def wrap_test_level(*args, **kwargs):
             _logger.debug(f"wrap_test_level: {func}")
             _logger.debug(f"wrap_test_level: {level}")

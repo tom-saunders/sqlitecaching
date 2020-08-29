@@ -58,15 +58,23 @@ def handle_arguments():
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
     tests.config.set_output_dir(args.output_dir)
+
+    log_level = LogLevel.convert(args.log_level).value[1]
+    test_log_level = LogLevel.convert(args.test_log_level)
+
     root_logger = logging.getLogger("")
     root_log_path = f"{args.output_dir}/test_handler.log"
     root_handler = logging.FileHandler(root_log_path)
-    root_handler.setLevel(LogLevel.convert(args.log_level).value[1])
+    root_handler.setLevel(log_level)
     root_logger.addHandler(root_handler)
 
     if not args.log_output_dir:
         args.log_output_dir = args.output_dir
-    tests.config.set_log_dir(args.log_output_dir)
+    tests.config.set_logger_level(LogLevel.DEBUG)
+    tests.config.set_log_output((f"{args.log_output_dir}/test.log", test_log_level))
+    tests.config.set_debug_output(
+        (f"{args.log_output_dir}/test.debug.log", LogLevel.DEBUG)
+    )
 
     if args.text:
         args.testrunner = unittest.TextTestRunner()
@@ -74,7 +82,6 @@ def handle_arguments():
         args.testrunner = xmlrunner.XMLTestRunner(output=args.output_dir)
 
     tests.config.set_test_level(args.test_level)
-    tests.config.set_log_level(args.test_log_level)
 
     return args
 
