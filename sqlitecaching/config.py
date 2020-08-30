@@ -67,8 +67,8 @@ class Config:
             log_handler.setLevel(log_level.value[1])
 
             log_format = (
-                "%(asctime)s %(levelname)s [%(name)s] %(funcName)s"
-                "[%(filename)s:%(lineno)d] -  %(message)s"
+                "%(asctime)s %(levelname)-8s %(funcName)-16s - %(message)s "
+                "- [%(name)s]"
             )
             log_formatter = UTCFormatter(log_format)
             log_handler.setFormatter(log_formatter)
@@ -98,8 +98,8 @@ class Config:
             debug_handler.setLevel(debug_level.value[1])
 
             debug_format = (
-                "%(asctime)s %(levelname)s [%(name)s] %(funcName)s"
-                "[%(filename)s:%(lineno)d] - %(message)s"
+                "%(asctime)s %(levelname)-8s %(funcName)-16s - %(message)s "
+                "- [%(name)s] [%(filename)s:%(lineno)d]"
             )
             debug_formatter = UTCFormatter(debug_format)
             debug_handler.setFormatter(debug_formatter)

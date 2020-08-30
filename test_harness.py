@@ -9,6 +9,7 @@ import unittest
 import xmlrunner
 
 import tests
+from sqlitecaching.config import UTCFormatter
 from sqlitecaching.enums import LogLevel
 
 
@@ -63,9 +64,17 @@ def handle_arguments():
     test_log_level = LogLevel.convert(args.test_log_level)
 
     root_logger = logging.getLogger("")
+
     root_log_path = f"{args.output_dir}/test_handler.log"
     root_handler = logging.FileHandler(root_log_path)
     root_handler.setLevel(log_level)
+
+    root_format = (
+        "%(asctime)s %(levelname)-8s %(funcName)-16s - %(message)s - [%(name)s]"
+    )
+    root_formatter = UTCFormatter(root_format)
+    root_handler.setFormatter(root_formatter)
+
     root_logger.addHandler(root_handler)
 
     if not args.log_output_dir:
