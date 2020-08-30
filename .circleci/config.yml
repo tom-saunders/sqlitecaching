@@ -42,22 +42,22 @@ jobs:
                     mkdir -p ~/circleci-sqlitecache/test-results/unittest
                     mkdir -p ~/circleci-sqlitecache/test-results/flake8
             - run:
-                command: >
-                    pipenv run ./test_harness.py
-                        --output-dir ~/circleci-sqlitecache/test-results/unittest
-                        --log-level info
-                        --test-log-level debug
+                command: |
+                    pipenv run ./test_harness.py \
+                        --output-dir ~/circleci-sqlitecache/test-results/unittest \
+                        --log-level info \
+                        --test-log-level debug \
                         --test-level full
             - run:
-                command: >
-                    pipenv run flake8
-                        --extend-exclude .venv/
-                        --tee
-                        --output ~/circleci-sqlitecache/test-results/flake8/flake8.txt
+                command: |
+                    pipenv run flake8 \
+                        --extend-exclude .venv/ \
+                        --tee \
+                        --output ~/circleci-sqlitecache/test-results/flake8/flake8.txt \
                     || true
 
-                    pipenv run flake8_junit
-                        ~/circleci-sqlitecache/test-results/flake8/flake8.txt
+                    pipenv run flake8_junit \
+                        ~/circleci-sqlitecache/test-results/flake8/flake8.txt \
                         ~/circleci-sqlitecache/test-results/flake8/flake8_junit.xml
             - store_test_results:
                 path: ~/circleci-sqlitecache/test-results
