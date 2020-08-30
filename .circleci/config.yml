@@ -17,7 +17,7 @@ jobs:
             - run: sudo chown -R circleci:circleci /usr/local/bin
             - run: sudo chown -R circleci:circleci /usr/local/lib/python3.8/site-packages
             - run: |
-                git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-idents
+                git lfs ls-files -l | cut -d ' ' -f1 | sort > .lfs-idents
             - restore_cache:
                 key: v1-lfs-{{ .Branch }}-{{ checksum ".lfs-idents" }}
             - run: |
@@ -42,12 +42,23 @@ jobs:
                     mkdir -p ~/circleci-sqlitecache/test-results/unittest
                     mkdir -p ~/circleci-sqlitecache/test-results/flake8
             - run:
-                command: |
-                    pipenv run ./test_harness.py --output-dir ~/circleci-sqlitecache/test-results/unittest
+                command: >
+                    pipenv run ./test_harness.py
+                        --output-dir ~/circleci-sqlitecache/test-results/unittest
+                        --log-level info
+                        --test-log-level debug
+                        --test-level full
             - run:
-                command: |
-                    pipenv run flake8 --extend-exclude .venv/ --tee --output ~/circleci-sqlitecache/test-results/flake8/flake8.txt || true
-                    pipenv run flake8_junit ~/circleci-sqlitecache/test-results/flake8/flake8.txt ~/circleci-sqlitecache/test-results/flake8/flake8_junit.xml
+                command: >
+                    pipenv run flake8
+                        --extend-exclude .venv/
+                        --tee
+                        --output ~/circleci-sqlitecache/test-results/flake8/flake8.txt
+                    || true
+
+                    pipenv run flake8_junit
+                        ~/circleci-sqlitecache/test-results/flake8/flake8.txt
+                        ~/circleci-sqlitecache/test-results/flake8/flake8_junit.xml
             - store_test_results:
                 path: ~/circleci-sqlitecache/test-results
             - store_artifacts:
