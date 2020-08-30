@@ -5,8 +5,8 @@ class CacheDictPersistenceTestBase(CacheDictTestBase):
     def provide_test_config(self):
         self.logger.debug("using base persistence configuration")
 
-        test_configuration = {
-            "mapping": {},
+        test_config = {
+            "mapping_config": {},
             "inputs": [
                 {
                     "inputs": [("a", "a"), ("b", "b"), ("a", "b")],
@@ -16,14 +16,19 @@ class CacheDictPersistenceTestBase(CacheDictTestBase):
                 {"inputs": [("a", "a"), ("a", "b")], "expected_outputs": {"a": "b"}},
             ],
         }
-        return test_configuration
+        return test_config
 
     def _test_retrieve_stored_value(self, *, cache_dict, inputs, expected_outputs):
         missing_value = object()
 
+        self.logger.debug("load inputs into cache_dist")
         for (input_key, input_value) in inputs:
             cache_dict[input_key] = input_value
 
+        self.logger.debug(
+            "check all actual keys in cache_dist are expected and "
+            "are associated with the value expected"
+        )
         for (actual_key, actual_value) in cache_dict.items():
             expected_value = expected_outputs.get(actual_key, missing_value)
             self.assertNotEqual(
@@ -37,6 +42,7 @@ class CacheDictPersistenceTestBase(CacheDictTestBase):
                 f"retrieved value does not match expected for key: {actual_key}",
             )
 
+        self.logger.debug("check all expected keys are in cache_dist")
         for (expected_key, expected_value) in expected_outputs.items():
             actual_value = cache_dict.get(expected_key, missing_value)
             self.assertNotEqual(
@@ -51,7 +57,12 @@ class CacheDictPersistenceTestBase(CacheDictTestBase):
         if not config_provider:
             config_provider = self.provide_test_config
         test_config = config_provider()
-        mapping_config = test_config.get("mapping_config", None)
+        mapping_config = test_config["mapping_config"]
+        self.logger.debug(
+            "running %d inputs with mapping %s",
+            len(test_config["inputs"]),
+            mapping_config,
+        )
         for test_input in test_config["inputs"]:
             cache_dict = dict_provider(mapping_config)
             with self.subTest(
@@ -59,6 +70,7 @@ class CacheDictPersistenceTestBase(CacheDictTestBase):
                 test_input=test_input,
                 mapping_config=mapping_config,
             ):
+                self.logger.debug("running with input %s", test_input)
                 self._test_retrieve_stored_value(
                     cache_dict=cache_dict,
                     inputs=test_input["inputs"],
