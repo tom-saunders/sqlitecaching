@@ -53,9 +53,11 @@ class Config:
 
             if self.logger_level > log_level:
                 self.logger.warn(
-                    "configuring log_handler at level %s for logger %s "
-                    + "which has logger_level: %s which will not log "
-                    + "additional output",
+                    (
+                        "configuring log_handler at level %s for logger %s "
+                        "which has logger_level: %s which will not log "
+                        "additional output"
+                    ),
                     log_level,
                     self.log_ident,
                     self.logger_level,
@@ -66,7 +68,7 @@ class Config:
 
             log_format = (
                 "%(asctime)s %(levelname)s [%(name)s] %(funcName)s"
-                + "[%(filename)s:%(lineno)d] -  %(message)s"
+                "[%(filename)s:%(lineno)d] -  %(message)s"
             )
             log_formatter = UTCFormatter(log_format)
             log_handler.setFormatter(log_formatter)
@@ -82,9 +84,11 @@ class Config:
 
             if self.logger_level > debug_level:
                 self.logger.warn(
-                    "configuring debug_handler at level %s for logger %s "
-                    + "which has logger_level: %s which will not log "
-                    + "additional output",
+                    (
+                        "configuring debug_handler at level %s for logger %s "
+                        "which has logger_level: %s which will not log "
+                        "additional output"
+                    ),
                     debug_level,
                     self.log_ident,
                     self.logger_level,
@@ -95,7 +99,7 @@ class Config:
 
             debug_format = (
                 "%(asctime)s %(levelname)s [%(name)s] %(funcName)s"
-                + "[%(filename)s:%(lineno)d] - %(message)s"
+                "[%(filename)s:%(lineno)d] - %(message)s"
             )
             debug_formatter = UTCFormatter(debug_format)
             debug_handler.setFormatter(debug_formatter)

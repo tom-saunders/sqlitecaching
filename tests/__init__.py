@@ -1,4 +1,3 @@
-import functools
 import unittest
 
 from sqlitecaching.config import Config as BaseConfig
@@ -31,26 +30,11 @@ _logger = config.get_sub_logger("__init__")
 
 
 def test_level(level):
-    _logger.debug(f"test_level: {level}")
-
-    def decorator_test_level(func):
-        _logger.debug(f"decorator_test_level: {func}")
-        _logger.debug(f"decorator_test_level: {level}")
-        _logger.debug(f"decorator_test_level: {config.get_test_level()}")
-        _logger.debug(f"decorator_test_level: {config.get_test_level() < level}")
-
-        @unittest.skipIf(
-            config.get_test_level() < level,
-            f"Skipping test configured at level {level}",
-        )
-        @functools.wraps(func)
-        def wrap_test_level(*args, **kwargs):
-            _logger.debug(f"wrap_test_level: {func}")
-            _logger.debug(f"wrap_test_level: {level}")
-            _logger.debug(f"wrap_test_level: {config.get_test_level()}")
-            _logger.debug(f"wrap_test_level: {config.get_test_level() < level}")
-            return func(*args, **kwargs)
-
-        return wrap_test_level
-
-    return decorator_test_level
+    _logger.debug("config: %s level: %s", config.get_test_level(), level)
+    return unittest.skipIf(
+        config.get_test_level() < level,
+        (
+            f"Skipping test configured at level {level} as configured level is "
+            f"{config.get_test_level()}"
+        ),
+    )
