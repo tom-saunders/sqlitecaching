@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "77292b1de666d306934d3123963155a6ee7eec2abe9c8ff8ee98ea0f0cb2f70f"
+            "sha256": "88bca4d34f709a92dca22a8db56f133ab3630a980d991f500dc34fee53411b93"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -15,7 +15,15 @@
             }
         ]
     },
-    "default": {},
+    "default": {
+        "ordered-enum": {
+            "hashes": [
+                "sha256:6544c0f528eeeec0bbe7999bf512c40fe62de24bedba9cf881f3bc24f57ad773"
+            ],
+            "index": "pypi",
+            "version": "==0.0.6"
+        }
+    },
     "develop": {
         "appdirs": {
             "hashes": [
@@ -114,13 +122,6 @@
                 "sha256:ab45090ae383b716c4ef89e690c41ff8c2b257b85b309f01f3654df3d084bd7c"
             ],
             "version": "==1.5.0"
-        },
-        "ordered-enum": {
-            "hashes": [
-                "sha256:6544c0f528eeeec0bbe7999bf512c40fe62de24bedba9cf881f3bc24f57ad773"
-            ],
-            "index": "pypi",
-            "version": "==0.0.6"
         },
         "parameterized": {
             "hashes": [

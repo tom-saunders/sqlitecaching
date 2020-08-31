@@ -10,10 +10,10 @@ flake8-junit-report = "~=2.1"
 pre-commit = "~=2.7"
 black = "==19.10b0"
 isort = "~=5.4"
-ordered-enum = "~=0.0"
 parameterized = "~=0.7"
 
 [packages]
+ordered-enum = "~=0.0"
 
 [requires]
 python_version = "3.8"

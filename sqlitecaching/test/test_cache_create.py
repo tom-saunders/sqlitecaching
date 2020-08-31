@@ -32,7 +32,7 @@ class TestCacheDictCreation(CacheDictTestBase):
             self.assertNotEqual(c, None)
 
     def test_create_from_connection_noargs(self):
-        c = CacheDict.create_from_conn(conn=None)
+        c = CacheDict._create_from_conn(conn=None)
         self.assertNotEqual(c, None)
 
 
