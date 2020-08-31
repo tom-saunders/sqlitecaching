@@ -4,18 +4,18 @@ import unittest
 from sqlitecaching.config import Config as BaseConfig
 from tests.enums import TestLevel
 
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
+
 
 class Config(BaseConfig):
-    _test_level = TestLevel.PRE_COMMIT
-    _output_dir = None
-
     def __init__(
         self, *args, test_level=TestLevel.PRE_COMMIT, output_dir=None, **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self._test_level = test_level
         self._output_dir = output_dir
-        self._resource_dir = "./test/resources/"
+        self._resource_dir = "./tests/resources/"
 
     def set_test_level(self, level):
         self._test_level = TestLevel.convert(level)
@@ -33,12 +33,11 @@ class Config(BaseConfig):
         self._resource_dir = path
 
 
-config = Config(log_ident=__name__,)
-_logger = config.get_sub_logger("__init__")
+config = Config()
 
 
 def test_level(level):
-    _logger.debug("config: %s level: %s", config.get_test_level(), level)
+    log.debug("config: %s level: %s", config.get_test_level(), level)
     return unittest.skipIf(
         config.get_test_level() < level,
         (
@@ -51,8 +50,5 @@ def test_level(level):
 class CacheDictTestBase(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        self.logger = config.get_sub_logger(type(self).__name__)
-        self.logger.setLevel(logging.DEBUG)
 
         self.res_dir = config.get_resource_dir()

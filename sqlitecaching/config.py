@@ -3,6 +3,9 @@ import time
 
 from sqlitecaching.enums import LogLevel
 
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
+
 
 class UTCFormatter(logging.Formatter):
     converter = time.gmtime
@@ -10,20 +13,11 @@ class UTCFormatter(logging.Formatter):
 
 class Config:
     def __init__(
-        self,
-        *,
-        log_ident,
-        logger_level=LogLevel.WARNING,
-        log_output=None,
-        debug_output=None,
+        self, *, logger_level=LogLevel.WARNING, log_output=None, debug_output=None,
     ):
-        self.log_ident = log_ident
         self.logger_level = logger_level
         self.log_output = log_output
         self.debug_output = debug_output
-
-        self.logger = logging.getLogger(self.log_ident)
-        self.logger.addHandler(logging.NullHandler())
 
         # used to allow removal of configured handlers
         # without this we end up with duplicate settings
@@ -31,19 +25,17 @@ class Config:
         self._setup_logging()
 
     def _setup_logging(self):
-        self.logger.info("(re)setting up logger: %s", self.log_ident)
-        self.logger.info(
-            "setting logger %s level to %s", self.log_ident, self.logger_level
-        )
-        self.logger.setLevel(self.logger_level.value[1])
+        log.info("(re)setting up logger: %s", log.name)
+        log.info("setting logger %s level to %s", log.name, self.logger_level)
+        log.setLevel(self.logger_level.value[1])
 
         if self._log_handlers:
-            self.logger.debug(
-                "clean up previously configured handlers for logger %s", self.log_ident,
+            log.debug(
+                "clean up previously configured handlers for logger %s", log.name,
             )
             for handler in self._log_handlers:
-                self.logger.debug("remove handler: %s", handler)
-                self.logger.removeHandler(handler)
+                log.debug("remove handler: %s", handler)
+                log.removeHandler(handler)
 
         self._log_handlers = []
 
@@ -52,14 +44,14 @@ class Config:
             log_level = self.log_output[1]
 
             if self.logger_level > log_level:
-                self.logger.warn(
+                log.warn(
                     (
                         "configuring log_handler at level %s for logger %s "
                         "which has logger_level: %s which will not log "
                         "additional output"
                     ),
                     log_level,
-                    self.log_ident,
+                    log.name,
                     self.logger_level,
                 )
 
@@ -73,24 +65,24 @@ class Config:
             log_formatter = UTCFormatter(log_format)
             log_handler.setFormatter(log_formatter)
 
-            self.logger.addHandler(log_handler)
+            log.addHandler(log_handler)
             self._log_handlers.append(log_handler)
 
-            self.logger.debug("configured log_handler: %s", log_handler)
+            log.debug("configured log_handler: %s", log_handler)
 
         if self.debug_output:
             debug_path = self.debug_output[0]
             debug_level = self.debug_output[1]
 
             if self.logger_level > debug_level:
-                self.logger.warn(
+                log.warn(
                     (
                         "configuring debug_handler at level %s for logger %s "
                         "which has logger_level: %s which will not log "
                         "additional output"
                     ),
                     debug_level,
-                    self.log_ident,
+                    log.name,
                     self.logger_level,
                 )
 
@@ -104,20 +96,24 @@ class Config:
             debug_formatter = UTCFormatter(debug_format)
             debug_handler.setFormatter(debug_formatter)
 
-            self.logger.addHandler(debug_handler)
+            log.addHandler(debug_handler)
             self._log_handlers.append(debug_handler)
 
-            self.logger.debug(
+            log.debug(
                 "configured debug file_handler: %s", debug_handler,
             )
 
-        self.logger.debug("(re)set up logger: %s", self.log_ident)
+        log.debug("(re)set up logger: %s", log.name)
 
-    def get_sub_logger(self, ident):
-        sub_ident = f"{self.log_ident}.{ident}"
-        sub_logger = logging.getLogger(sub_ident)
-        self.logger.info("get sub_logger: %s", sub_ident)
-        sub_logger.setLevel(logging.NOTSET)
+    def get_sub_logger(self, sub_ident):
+        if sub_ident.startswith(f"{log.name}."):
+            ident = sub_ident
+        else:
+            ident = f"{log.name}.{sub_ident}"
+
+        sub_logger = logging.getLogger(ident)
+        sub_logger.info("got sub_logger: %s", ident)
+
         return sub_logger
 
     def set_log_output(self, log_output):

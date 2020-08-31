@@ -1,9 +1,14 @@
+import logging
+
 from tests import CacheDictTestBase, TestLevel, test_level
+
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
 
 class CacheDictPersistenceTestBase(CacheDictTestBase):
     def provide_test_config(self):
-        self.logger.debug("using base persistence configuration")
+        log.debug("using base persistence configuration")
 
         test_config = {
             "mapping_config": {},
@@ -21,11 +26,11 @@ class CacheDictPersistenceTestBase(CacheDictTestBase):
     def _test_retrieve_stored_value(self, *, cache_dict, inputs, expected_outputs):
         missing_value = object()
 
-        self.logger.debug("load inputs into cache_dist")
+        log.debug("load inputs into cache_dist")
         for (input_key, input_value) in inputs:
             cache_dict[input_key] = input_value
 
-        self.logger.debug(
+        log.debug(
             "check all actual keys in cache_dist are expected and "
             "are associated with the value expected"
         )
@@ -42,7 +47,7 @@ class CacheDictPersistenceTestBase(CacheDictTestBase):
                 f"retrieved value does not match expected for key: {actual_key}",
             )
 
-        self.logger.debug("check all expected keys are in cache_dist")
+        log.debug("check all expected keys are in cache_dist")
         for (expected_key, expected_value) in expected_outputs.items():
             actual_value = cache_dict.get(expected_key, missing_value)
             self.assertNotEqual(
@@ -58,7 +63,7 @@ class CacheDictPersistenceTestBase(CacheDictTestBase):
             config_provider = self.provide_test_config
         test_config = config_provider()
         mapping_config = test_config["mapping_config"]
-        self.logger.debug(
+        log.debug(
             "running %d inputs with mapping %s",
             len(test_config["inputs"]),
             mapping_config,
@@ -70,7 +75,7 @@ class CacheDictPersistenceTestBase(CacheDictTestBase):
                 test_input=test_input,
                 mapping_config=mapping_config,
             ):
-                self.logger.debug("running with input %s", test_input)
+                log.debug("running with input %s", test_input)
                 self._test_retrieve_stored_value(
                     cache_dict=cache_dict,
                     inputs=test_input["inputs"],

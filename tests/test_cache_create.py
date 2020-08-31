@@ -1,44 +1,49 @@
-import unittest
+import logging
 
-import tests
 from sqlitecaching.dict import CacheDict
-from tests import TestLevel, test_level
+from tests import CacheDictTestBase, TestLevel, test_level
 
-logger = tests.config.get_sub_logger("cache.creation")
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
 
 @test_level(TestLevel.PRE_COMMIT)
-class TestCacheDictCreation(unittest.TestCase):
+class TestCacheDictCreation(CacheDictTestBase):
     def test_create_from_connection_noargs(self):
-        c = CacheDict.create_from_connection()
+        c = CacheDict.open_anon_memory()
+        c = CacheDict.open_anon_disk()
+        c = CacheDict.open_readonly(path=f"{self.res_dir}/readonly.empty.sqlite")
+        c = CacheDict.open_readwrite(path=f"{self.res_dir}/readwrite.empty.sqlite")
+        c = CacheDict.open_readwrite(path="tmpfile.sqlite", create=True)
+        c = CacheDict.create_from_conn(conn=c.conn)
         self.assertNotEqual(c, None)
 
 
 # @test_level(TestLevel.FULL)
 # class TestCreateCacheDic2(unittest.TestCase):
-#     logger.warning("B")
+#     log.warning("B")
 #
 #     def test_create_noargs(self):
-#         logger.warning("b")
+#         log.warning("b")
 #         c = CacheDict.create_from_connection()
 #         self.assertNotEqual(c, None)
 #
 #
 # class TestCreateCacheDic3(unittest.TestCase):
-#     logger.warning("C")
+#     log.warning("C")
 #
 #     @test_level(TestLevel.PRE_COMMIT)
 #     def test_create_noargs(self):
-#         logger.warning("c")
+#         log.warning("c")
 #         c = CacheDict.create_from_connection()
 #         self.assertNotEqual(c, None)
 #
 #
 # class TestCreateCacheDic4(unittest.TestCase):
-#     logger.warning("D")
+#     log.warning("D")
 #
 #     @test_level(TestLevel.FULL)
 #     def test_create_noargs(self):
-#         logger.warning("d")
+#         logr.warning("d")
 #         c = CacheDict.create_from_connection()
 #         self.assertNotEqual(c, None)

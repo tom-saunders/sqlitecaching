@@ -32,7 +32,7 @@ def handle_arguments():
     argparser.add_argument(
         "-l",
         "--log-level",
-        default="warning",
+        default="notset",
         type=str,
         choices=[level.casefold() for level in LogLevel.values()],
     )
@@ -46,7 +46,7 @@ def handle_arguments():
     argparser.add_argument(
         "-T",
         "--test-log-level",
-        default="warning",
+        default="notset",
         type=str,
         choices=[level.casefold() for level in LogLevel.values()],
     )
@@ -63,7 +63,7 @@ def handle_arguments():
     log_level = LogLevel.convert(args.log_level).value[1]
     test_log_level = LogLevel.convert(args.test_log_level)
 
-    root_logger = logging.getLogger("")
+    root_logger = logging.getLogger()
 
     root_log_path = f"{args.output_dir}/test_handler.log"
     root_handler = logging.FileHandler(root_log_path)
@@ -96,7 +96,6 @@ def handle_arguments():
 
 
 if __name__ == "__main__":
-    logging.getLogger("").setLevel(logging.DEBUG)
     args = handle_arguments()
     unittest.main(
         module=None,
