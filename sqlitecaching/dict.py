@@ -19,21 +19,16 @@ class CacheDict(UserDict):
 
     default_mapping = {}
 
-    def __init__(self, *args, conn, mapping, log_name, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *, conn, mapping, log_name, **kwargs):
+        # Don't populate anything by passing **kwargs here.
+        super().__init__()
 
         internally_constructed = kwargs.get("_cd_internal_flag", None)
-        if not internally_constructed:
+        if (not internally_constructed) or (
+            internally_constructed is not type(self).__internally_constructed
+        ):
             log.warn(
                 "direct construction of %s may lead to unexpected behaviours",
-                type(self).__name__,
-            )
-        elif internally_constructed is not type(self).__internally_constructed:
-            log.warn(
-                (
-                    "(invalid __internal_constructed?) direct construction of %s "
-                    "may lead to unexpected behaviours"
-                ),
                 type(self).__name__,
             )
 
