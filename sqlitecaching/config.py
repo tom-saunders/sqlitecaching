@@ -8,6 +8,16 @@ log.addHandler(logging.NullHandler())
 
 
 class UTCFormatter(logging.Formatter):
+    def __init__(self, *, fmt=None, datefmt=None):
+        if not fmt:
+            fmt = (
+                "%(asctime)s %(levelname)-4.4s: %(funcName)16s: %(message)s "
+                "- [%(name)s]"
+            )
+        if not datefmt:
+            datefmt = "%Y-%m-%dT%H:%M:%S%z"
+        super().__init__(fmt, datefmt)
+
     converter = time.gmtime
 
 
@@ -58,11 +68,7 @@ class Config:
             log_handler = logging.FileHandler(log_path)
             log_handler.setLevel(log_level.value[1])
 
-            log_format = (
-                "%(asctime)s %(levelname)-8s %(funcName)-16s - %(message)s "
-                "- [%(name)s]"
-            )
-            log_formatter = UTCFormatter(log_format)
+            log_formatter = UTCFormatter()
             log_handler.setFormatter(log_formatter)
 
             log.addHandler(log_handler)
@@ -90,10 +96,10 @@ class Config:
             debug_handler.setLevel(debug_level.value[1])
 
             debug_format = (
-                "%(asctime)s %(levelname)-8s %(funcName)-16s - %(message)s "
+                "%(asctime)s %(levelname)-4.4s: %(funcName)16s: %(message)s "
                 "- [%(name)s] [%(filename)s:%(lineno)d]"
             )
-            debug_formatter = UTCFormatter(debug_format)
+            debug_formatter = UTCFormatter(fmt=debug_format)
             debug_handler.setFormatter(debug_formatter)
 
             log.addHandler(debug_handler)

@@ -8,9 +8,10 @@ import unittest
 
 import xmlrunner
 
-import tests
 from sqlitecaching.config import UTCFormatter
 from sqlitecaching.enums import LogLevel
+from sqlitecaching.test import TestLevel
+from sqlitecaching.test import config as testconfig
 
 
 def handle_arguments():
@@ -41,7 +42,7 @@ def handle_arguments():
         "--test-level",
         default="pre-commit",
         type=str,
-        choices=tests.TestLevel.values(),
+        choices=TestLevel.values(),
     )
     argparser.add_argument(
         "-T",
@@ -58,7 +59,7 @@ def handle_arguments():
 
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
-    tests.config.set_output_dir(args.output_dir)
+    testconfig.set_output_dir(args.output_dir)
 
     log_level = LogLevel.convert(args.log_level).value[1]
     test_log_level = LogLevel.convert(args.test_log_level)
@@ -69,19 +70,16 @@ def handle_arguments():
     root_handler = logging.FileHandler(root_log_path)
     root_handler.setLevel(log_level)
 
-    root_format = (
-        "%(asctime)s %(levelname)-8s %(funcName)-16s - %(message)s - [%(name)s]"
-    )
-    root_formatter = UTCFormatter(root_format)
+    root_formatter = UTCFormatter()
     root_handler.setFormatter(root_formatter)
 
     root_logger.addHandler(root_handler)
 
     if not args.log_output_dir:
         args.log_output_dir = args.output_dir
-    tests.config.set_logger_level(LogLevel.DEBUG)
-    tests.config.set_log_output((f"{args.log_output_dir}/test.log", test_log_level))
-    tests.config.set_debug_output(
+    testconfig.set_logger_level(LogLevel.DEBUG)
+    testconfig.set_log_output((f"{args.log_output_dir}/test.log", test_log_level))
+    testconfig.set_debug_output(
         (f"{args.log_output_dir}/test.debug.log", LogLevel.DEBUG)
     )
 
@@ -90,7 +88,7 @@ def handle_arguments():
     else:
         args.testrunner = xmlrunner.XMLTestRunner(output=args.output_dir)
 
-    tests.config.set_test_level(args.test_level)
+    testconfig.set_test_level(args.test_level)
 
     return args
 

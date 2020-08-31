@@ -1,6 +1,6 @@
 import logging
 
-from tests import CacheDictTestBase, TestLevel, test_level
+from sqlitecaching.test import CacheDictTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())

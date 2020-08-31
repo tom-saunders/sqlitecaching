@@ -2,7 +2,7 @@ import logging
 import unittest
 
 from sqlitecaching.config import Config as BaseConfig
-from tests.enums import TestLevel
+from sqlitecaching.test.enums import TestLevel
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
@@ -15,7 +15,7 @@ class Config(BaseConfig):
         super().__init__(*args, **kwargs)
         self._test_level = test_level
         self._output_dir = output_dir
-        self._resource_dir = "./tests/resources/"
+        self._resource_dir = "./sqlitecaching/test/resources/"
 
     def set_test_level(self, level):
         self._test_level = TestLevel.convert(level)
