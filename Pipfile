@@ -11,6 +11,7 @@ pre-commit = "~=2.7"
 black = "==19.10b0"
 isort = "~=5.4"
 ordered-enum = "~=0.0"
+parameterized = "~=0.7"
 
 [packages]
 
