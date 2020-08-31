@@ -59,14 +59,21 @@ class CacheDict(UserDict):
             return {}
 
         cleaned_params = {}
-        for (key, value) in sqlite_params.items():
-            if key in cls._passthrough_params:
+        for (param, value) in sqlite_params.items():
+            if param in cls._passthrough_params:
                 if value:
-                    cleaned_params[key] = value
+                    cleaned_params[param] = value
                 else:
-                    pass
+                    log.debug("sqlite parameter %s present but no value", param)
             else:
-                pass
+                log.warn(
+                    (
+                        "unsupported (by sqlitecaching) sqlite parameter %s "
+                        "found with value %s - removing"
+                    ),
+                    param,
+                    value,
+                )
         return cleaned_params
 
     _anon_mem_path = ":memory:"

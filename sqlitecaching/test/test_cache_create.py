@@ -1,4 +1,5 @@
 import logging
+import tempfile
 
 from sqlitecaching.dict import CacheDict
 from sqlitecaching.test import CacheDictTestBase, TestLevel, test_level
@@ -26,8 +27,9 @@ class TestCacheDictCreation(CacheDictTestBase):
         self.assertNotEqual(c, None)
 
     def test_open_readwrite_create(self):
-        c = CacheDict.open_readwrite(path="tmpfile.sqlite", create=True)
-        self.assertNotEqual(c, None)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            c = CacheDict.open_readwrite(path=f"{tmpdir}/tmpfile.sqlite", create=True)
+            self.assertNotEqual(c, None)
 
     def test_create_from_connection_noargs(self):
         c = CacheDict.create_from_conn(conn=None)

@@ -28,25 +28,29 @@ class TestCacheDictPersistence(CacheDictTestBase):
         }
         return test_config
 
-    @classmethod
-    def _provider(cls, *, params):
-        return CacheDict.open_anon_memory(**params)
-
-    TestDef = namedtuple("TestDef", ["name", "provider_params", "inputs", "outputs"])
+    TestDef = namedtuple(
+        "TestDef", ["name", "provider", "provider_params", "inputs", "outputs"]
+    )
 
     @parameterized.parameterized.expand(
         [
             TestDef(
-                name="why", provider_params={}, inputs=[("a", "a")], outputs={"a": "a"},
+                name="why",
+                provider=CacheDict.open_anon_memory,
+                provider_params={},
+                inputs=[("a", "a")],
+                outputs={"a": "a"},
             ),
             TestDef(
                 name="who",
+                provider=CacheDict.open_anon_memory,
                 provider_params={},
                 inputs=[("a", "a"), ("a", "b")],
                 outputs={"a": "b"},
             ),
             TestDef(
                 name="where",
+                provider=CacheDict.open_anon_memory,
                 provider_params={},
                 inputs=[("a", "a"), ("b", "b")],
                 outputs={"a": "a", "b": "b"},
@@ -54,10 +58,10 @@ class TestCacheDictPersistence(CacheDictTestBase):
         ]
     )
     def test_retrieve_stored_value(
-        self, name, provider_params, inputs, expected_outputs
+        self, name, provider, provider_params, inputs, expected_outputs
     ):
         missing_value = object()
-        cache_dict = self._provider(params=provider_params)
+        cache_dict = provider(**provider_params)
 
         log.debug("load inputs into cache_dist")
         for (input_key, input_value) in inputs:
