@@ -2,7 +2,6 @@ import collections
 import logging
 import re
 import sqlite3
-import textwrap
 from collections import UserDict, namedtuple
 
 log = logging.getLogger(__name__)
@@ -155,55 +154,48 @@ class CacheDict(UserDict):
         )
 
 
-CacheDictColumnTypes = namedtuple("CacheDictColumnTypes", ["pytype", "sqltype"])
-CacheDictMappingTuple = namedtuple(
-    "CacheDictMappingTuple", ["table_name", "key_columns", "value_columns"]
-)
+CacheDictMappingTuple = namedtuple("CacheDictMappingTuple", ["table", "keys", "values"])
 
 
 class CacheDictMapping:
-    def __init__(self, *, table_name, keys, values):
+    def __init__(self, *, table, keys, values):
+        if not keys:
+            fmt = "sqlitecaching keys must not be empty"
+            log.error(fmt)
+            raise CacheDictException(fmt)
+
+        validated_table = self._validate_identifier(table)
+        if validated_table.startswith("sqlite_"):
+            fmt = "table cannot start with sqlite_ : [%s]"
+            log.error(fmt, validated_table)
+            raise CacheDictException(fmt % validated_table)
+
         key_columns = collections.OrderedDict()
         value_columns = collections.OrderedDict()
         keyval_columns = []
 
-        validated_table_name = self._validate_identifier(table_name)
-        if validated_table_name.startswith("sqlite_"):
-            log.error(
-                "table_name cannot start with sqlite_ : [%s]", validated_table_name
-            )
-            raise CacheDictException(
-                "table_name cannot start with sqlite_ : [%s]" % validated_table_name
-            )
-
-        for (name, types) in keys.items():
+        for (name, sqltype) in keys.items():
             validated_name = self._validate_identifier(name)
-            self._handle_column(key_columns, validated_name, types)
+            self._handle_column(key_columns, validated_name, sqltype)
 
         unset_value = object()
-        for (name, types) in values.items():
+        for (name, sqltype) in values.items():
             validated_name = self._validate_identifier(name)
             in_keys = key_columns.get(validated_name, unset_value)
             if in_keys is not unset_value:
                 keyval_columns.append(validated_name)
             else:
-                self._handle_column(value_columns, validated_name, types)
+                self._handle_column(value_columns, validated_name, sqltype)
 
         if keyval_columns:
+            fmt = (
+                "the sets of key columns and value columns must be disjoint. "
+                "columns [%s] occur in both key and value sets"
+            )
             log.error(
-                (
-                    "the set of key columns and value columns must be disjoint. "
-                    "columns [%s] occur in both key and value sets"
-                ),
-                keyval_columns,
+                fmt, keyval_columns,
             )
-            raise CacheDictException(
-                (
-                    "the set of key columns and value columns must be disjoint. "
-                    "columns [%s] occur in both key and value sets"
-                )
-                % keyval_columns
-            )
+            raise CacheDictException(fmt % keyval_columns)
 
         self.Keys = namedtuple("Keys", key_columns.keys())
         self.Values = namedtuple("Values", value_columns.keys())
@@ -211,32 +203,84 @@ class CacheDictMapping:
         self.key_info = self.Keys(**key_columns)
         self.value_info = self.Values(**value_columns)
         self.mapping_tuple = CacheDictMappingTuple(
-            table=table_name, keys=self.key_info, values=self.value_info
+            table=validated_table, keys=self.key_info, values=self.value_info
         )
 
-    def create_table(self, *, conn):
-        pass
+        self._create_statement = None
+
+    # fmt: off
+    __CREATE_FMT = (
+        "-- sqlitecaching create table\n"
+        "CREATE TABLE {table_identifier}\n"
+        "(\n"
+        "    -- keys\n"
+        "    {key_column_definitions}\n"
+        "    -- values\n"
+        "    {value_column_definitions}\n"
+        "    {primary_key_definition}\n"
+        ");\n"
+    )
+    __PRIMARY_KEY_FMT = (
+        "PRIMARY KEY (\n"
+        "        {primary_key_columns}\n"
+        "    ) ON CONFLICT ABORT"
+    )
+    # fmt: on
+
+    def create_statement(self):
+        if self._create_statement:
+            return self._create_statement
+
+        table_identifier = self.mapping_tuple.table
+
+        keys = self.mapping_tuple.keys
+        key_columns = sorted(keys._fields)
+
+        values = self.mapping_tuple.values
+        value_columns = sorted(values._fields)
+
+        # fmt: off
+        key_column_definitions = "".join(
+            [
+                f"{column} {getattr(keys, column)}, -- primary key\n    "
+                for column in key_columns
+            ]
+        )
+        value_column_definitions = "".join(
+            [
+                f"{column} {getattr(values, column)}, -- value\n    "
+                for column in value_columns
+            ]
+        )
+        # fmt: on
+
+        primary_key_columns = ",\n        ".join(key_columns)
+        primary_key_definition = self.__PRIMARY_KEY_FMT.format(
+            primary_key_columns=primary_key_columns
+        )
+
+        self._create_statement = self.__CREATE_FMT.format(
+            table_identifier=table_identifier,
+            key_column_definitions=key_column_definitions,
+            value_column_definitions=value_column_definitions,
+            primary_key_definition=primary_key_definition,
+        )
+
+        return self._create_statement
 
     @classmethod
-    def _handle_column(cls, column_dict, validated_name, types, /):
-        pytype = types["pytype"]
-        sqltype = types["sqltype"]
-
-        cls._validate_pytype(pytype)
+    def _handle_column(cls, column_dict, validated_name, sqltype, /):
         validated_sqltype = cls._validate_sqltype(sqltype)
+        column_dict[validated_name] = validated_sqltype
 
-        type_tuple = CacheDictColumnTypes(pytype=pytype, sqltype=validated_sqltype)
-        column_dict[validated_name] = type_tuple
-
-    __IDENTIFIER_RE_DEFN = textwrap.dedent(
-        # must be  >#< aligned to set initial indent correctly
-        r"""        #
-        ^               # start of string
-        [a-z]           # start with an ascii letter
-        [a-z0-9_]{0,62} # followed by up to 62 alphanumeric or underscores
-        $               # end of string
-        """
+    # fmt: off
+    __IDENTIFIER_RE_DEFN = (
+        r"^               # start of string""\n"
+        r"[a-z]           # start with an ascii letter""\n"
+        r"[a-z0-9_]{0,62} # followed by up to 62 alphanumeric or underscores""\n"
+        r"$               # end of string""\n"
     )
+    # fmt: on
 
     __IDENTIFIER_PATTERN = re.compile(
         __IDENTIFIER_RE_DEFN, flags=(re.ASCII | re.IGNORECASE | re.VERBOSE),
@@ -244,62 +288,81 @@ class CacheDictMapping:
 
     @classmethod
     def _validate_identifier(cls, identifier, /):
+        if identifier != identifier.strip():
+            log.info(
+                (
+                    "sqlitecaching identifier provided: [%s] has whitespace "
+                    "which will be stripped."
+                ),
+                identifier,
+            )
+            identifier = identifier.strip()
         match = cls.__IDENTIFIER_PATTERN.match(identifier)
         if not match:
+            fmt = (
+                "sqlitecaching identifier provided: [%s] does not match "
+                "requirements [%s]"
+            )
             log.error(
-                (
-                    "sqlitecaching identifier provided: [%s] does not match "
-                    "requirements [%s]"
-                ),
-                identifier,
-                cls.__IDENTIFIER_RE_DEFN,
+                fmt, identifier, cls.__IDENTIFIER_RE_DEFN,
             )
-            raise CacheDictException(
-                (
-                    "sqlitecaching identifier provided: [%s] does not match "
-                    "requirements [%s]"
-                )
-                % (identifier, cls.__IDENTIFIER_RE_DEFN)
-            )
-        casefolded_identifier = identifier.casefold()
-        if identifier != casefolded_identifier:
+            raise CacheDictException(fmt % (identifier, cls.__IDENTIFIER_RE_DEFN))
+        lower_identifier = identifier.lower()
+        if identifier != lower_identifier:
             log.warning(
                 (
-                    "sqlitecaching identifier [%s] is not casefolded. Using "
-                    "casefolded value [%s]"
+                    "sqlitecaching identifier [%s] is not lowercase. Using "
+                    "lowercased value [%s]"
                 ),
                 identifier,
-                casefolded_identifier,
+                lower_identifier,
             )
 
-        return casefolded_identifier
-
-    @classmethod
-    def _validate_pytype(cls, pytype, /):
-        if not pytype:
-            return
-        elif pytype not in sqlite3.adapters:
-            log.warn(
-                (
-                    "sqltype [%s] is not present in sqlite3.converters, so may not "
-                    "be convertable from stored value to python object"
-                ),
-                pytype,
-            )
+        return lower_identifier
 
     @classmethod
     def _validate_sqltype(cls, sqltype, /):
-        validated_sqltype = cls._validate_identifier(sqltype)
-        # converters are all stored uppercase, so have to .upper()
-        if validated_sqltype.upper() not in sqlite3.converters:
+        if sqltype != sqltype.strip():
+            log.info(
+                (
+                    "sqlitecaching sqltype provided: [%s] has whitespace "
+                    "which will be stripped."
+                ),
+                sqltype,
+            )
+            sqltype = sqltype.strip()
+        if not sqltype:
+            return ""
+        match = cls.__IDENTIFIER_PATTERN.match(sqltype)
+        if not match:
+            fmt = (
+                "sqlitecaching sqltype provided: [%s] does not match "
+                "requirements [%s]"
+            )
+            log.error(
+                fmt, sqltype, cls.__IDENTIFIER_RE_DEFN,
+            )
+            raise CacheDictException(fmt % (sqltype, cls.__IDENTIFIER_RE_DEFN))
+        upper_sqltype = sqltype.upper()
+        if sqltype != upper_sqltype:
+            log.warning(
+                (
+                    "sqlitecaching sqltype [%s] is not uppercase. Using "
+                    "uppercased value [%s]"
+                ),
+                sqltype,
+                upper_sqltype,
+            )
+
+        if upper_sqltype not in sqlite3.converters:
             log.warn(
                 (
-                    "sqltype [%s] is not present in sqlite3.converters, so may not "
-                    "be convertable from stored value to python object"
+                    "sqltype [%s] is not currently present in sqlite3.converters. "
+                    "if sqlite cannot default convert, it may be returned as bytes()"
                 ),
-                validated_sqltype,
+                upper_sqltype,
             )
-        return validated_sqltype
+        return upper_sqltype
 
 
 class CacheDictException(Exception):
