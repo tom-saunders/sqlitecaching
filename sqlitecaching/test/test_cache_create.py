@@ -34,33 +34,3 @@ class TestCacheDictCreation(CacheDictTestBase):
     def test_create_from_connection_noargs(self):
         c = CacheDict._create_from_conn(conn=None)
         self.assertNotEqual(c, None)
-
-
-# @test_level(TestLevel.FULL)
-# class TestCreateCacheDic2(unittest.TestCase):
-#     log.warning("B")
-#
-#     def test_create_noargs(self):
-#         log.warning("b")
-#         c = CacheDict.create_from_connection()
-#         self.assertNotEqual(c, None)
-#
-#
-# class TestCreateCacheDic3(unittest.TestCase):
-#     log.warning("C")
-#
-#     @test_level(TestLevel.PRE_COMMIT)
-#     def test_create_noargs(self):
-#         log.warning("c")
-#         c = CacheDict.create_from_connection()
-#         self.assertNotEqual(c, None)
-#
-#
-# class TestCreateCacheDic4(unittest.TestCase):
-#     log.warning("D")
-#
-#     @test_level(TestLevel.FULL)
-#     def test_create_noargs(self):
-#         logr.warning("d")
-#         c = CacheDict.create_from_connection()
-#         self.assertNotEqual(c, None)
