@@ -1,89 +1,251 @@
 version: 2.1
 
-jobs:
-    build:
-        working_directory: ~/circleci-sqlitecache
-        docker:
-            - image: circleci/python:3.8.5
-              environment:
-                PIPENV_VENV_IN_PROJECT: true
-                GIT_LFS_SKIP_SMUDGE: 1
+commands:
+    common_setup:
+        description: "Setup work common to all jobs"
+        parameters:
+            after_setup:
+                description: "steps to run after setup complete."
+                type: steps
+                default: []
         steps:
             - run:
+                name: change ownership of parts of the filesystem (!?)
+                command: |
+                    sudo chown -R circleci:circleci /usr/local/bin
+                    sudo chown -R circleci:circleci /usr/local/lib/python3.8/site-packages
+
+            - run:
+                name: install dependencies
                 command: |
                     sudo apt install \
                         git-lfs
 
                     git lfs install
-                    sudo chown -R circleci:circleci /usr/local/bin
-                    sudo chown -R circleci:circleci /usr/local/lib/python3.8/site-packages
-                    sudo pip install pipenv
-            - checkout
-            - run:
-                command: |
-                    git lfs ls-files -l | cut -d ' ' -f1 | sort > .lfs-idents
-            - run:
-                command: |
-                    mkdir -p ~/circleci-sqlitecache/test-results
-                    touch ~/circleci-sqlitecache/test-results/file.pre
-                    touch ~/circleci-sqlitecache/test-results/file.mid
-                    touch ~/circleci-sqlitecache/test-results/file.lfs
-                    touch ~/circleci-sqlitecache/test-results/file.pev
-                    touch ~/circleci-sqlitecache/test-results/file.aft
-                    touch ~/circleci-sqlitecache/test-results/file.end
-                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.pre
-            - restore_cache:
-                key: v1-lfs-{{ .Branch }}-{{ checksum ".lfs-idents" }}
-            - restore_cache:
-                key: deps9-{{ .Branch }}-{{ checksum "Pipfile.lock" }}
-            - run:
-                command: |
-                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.mid
-            - run: |
-                git lfs pull
-            - run:
-                command: |
-                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.lfs
-            - save_cache:
-                key: v1-lfs-{{ .Branch }}-{{ checksum ".lfs-idents" }}
-                paths:
-                    - .git/lfs
-            - run:
-                command: |
-                    pipenv install --dev
-            - run:
-                command: |
-                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.pev
-            - save_cache: # cache Python dependencies using checksum of Pipfile as the cache-key
-                key: deps9-{{ .Branch }}-{{ checksum "Pipfile.lock" }}
-                paths:
-                    - "venv"
-            - run:
-                command: |
-                    mkdir -p ~/circleci-sqlitecache/test-results
-                    mkdir -p ~/circleci-sqlitecache/test-results/unittest
-                    mkdir -p ~/circleci-sqlitecache/test-results/flake8
-            - run:
-                command: |
-                    pipenv run ./test_harness.py \
-                        --output-dir ~/circleci-sqlitecache/test-results/unittest \
-                        --log-level info \
-                        --test-log-level debug \
-                        --test-level full
-            - run:
-                command: |
-                    pipenv run flake8 \
-                        --extend-exclude .venv/ \
-                        --tee \
-                        --output ~/circleci-sqlitecache/test-results/flake8/flake8.txt \
-                    || true
 
-                    pipenv run flake8_junit \
-                        ~/circleci-sqlitecache/test-results/flake8/flake8.txt \
-                        ~/circleci-sqlitecache/test-results/flake8/flake8_junit.xml
-                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.end
+                    sudo pip install pipenv
+
+            - attach_workspace:
+                at: ~/
+
+            - run:
+                name: trust github
+                command: |
+                    mkdir -p ~/.ssh/
+                    echo \
+                        "|1|w9ADPxiqpzD/t1+V4ew7UMquNIw=|u5IeQa+Z/+SARGngbfogSJLG8QY= ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7hRGmdnm9tUDbO9IDSwBK6TbQa+PXYPCPy6rbTrTtw7PHkccKrpp0yVhp5HdEIcKr6pLlVDBfOLX9QUsyCOV0wzfjIJNlGEYsdlLJizHhbn2mUjvSAHQqZETYP81eFzLQNnPHt4EVVUh7VfDESU84KezmD5QlWpXLmvU31/yMf+Se8xhHTvKSCZIFImWwoG6mbUoWf9nzpIoaSjB+weqqUUmpaaasXVal72J+UX2B+2RPW3RcT0eOzQgqlJL3RKrTJvdsjE3JEAvGq3lGHSZXy28G3skua2SmVi/w4yCE6gbODqnTWlg7+wC604ydGXA8VJiS5ap43JXiUFFAaQ==" \
+                        > ~/.ssh/known_hosts
+
+            - steps: << parameters.after_setup >>
+
+    store_test_artifacts:
+        description: "common form for storing test artifacts"
+        parameters:
+            test_name:
+                description: "name of test artifacts to store"
+                type: string
+        steps:
             - store_test_results:
-                path: ~/circleci-sqlitecache/test-results
+                name: store test results
+                path: ~/circleci-sqlitecache/test-results/<< parameters.test_name >>
+                when: always
             - store_artifacts:
-                path: ~/circleci-sqlitecache/test-results
-                destination: tr1
+                name: store test artifacts
+                path: ~/circleci-sqlitecache/test-results/<< parameters.test_name >>
+                destination: test_results/<< parameters.test_name >>
+                when: always
+
+
+jobs:
+    get_code:
+        working_directory: ~/circleci-sqlitecache
+        docker:
+            - image: circleci/python:3.8.5
+        environment:
+            PIPENV_VENV_IN_PROJECT: true
+            GIT_LFS_SKIP_SMUDGE: 1
+        steps:
+            - common_setup:
+                after_setup:
+                    - checkout
+
+                    - run:
+                        name: create output directories
+                        command: |
+                            mkdir -p ~/circleci-sqlitecache/test-results
+                            mkdir -p ~/circleci-sqlitecache/test-results/unittest
+                            mkdir -p ~/circleci-sqlitecache/test-results/flake8
+                            mkdir -p ~/circleci-sqlitecache/test-results/black
+                    - persist_to_workspace:
+                        root: ~/
+                        paths:
+                            - circleci-sqlitecache/
+
+
+    get_lfs:
+        working_directory: ~/circleci-sqlitecache
+        docker:
+            - image: circleci/python:3.8.5
+        environment:
+            PIPENV_VENV_IN_PROJECT: true
+            GIT_LFS_SKIP_SMUDGE: 1
+        steps:
+            - common_setup:
+                after_setup:
+                    - run:
+                        name: generate git-lfs identifier
+                        command: |
+                            git lfs ls-files -l | cut -d ' ' -f1 | sort > .lfs-idents
+                    - restore_cache:
+                        name: restore lfs cache
+                        key: v1-lfs-{{ checksum ".lfs-idents" }}
+                    - run:
+                        name: rehydrate any non-cached lfs items
+                        command: |
+                            git lfs pull
+                    - save_cache:
+                        name: save lfs cache
+                        key: v1-lfs-{{ checksum ".lfs-idents" }}
+                        paths:
+                            - .git/lfs
+                    - persist_to_workspace:
+                        root: ~/
+                        paths:
+                            - circleci-sqlitecache/.git/lfs/
+
+    get_venv:
+        working_directory: ~/circleci-sqlitecache
+        docker:
+            - image: circleci/python:3.8.5
+        environment:
+            PIPENV_VENV_IN_PROJECT: true
+            GIT_LFS_SKIP_SMUDGE: 1
+        steps:
+            - common_setup:
+                after_setup:
+                    - restore_cache:
+                        name: restore venv cache
+                        key: v1-venv-{{ checksum "Pipfile.lock" }}
+                    - run:
+                        name: install/update any non-cached dependencies
+                        command: |
+                            pipenv install --dev
+                    - save_cache:
+                        name: save venv cache
+                        key: v1-venv-{{ checksum "Pipfile.lock" }}
+                        paths:
+                            - .venv
+                    - persist_to_workspace:
+                        root: ~/
+                        paths:
+                            - circleci-sqlitecache/.venv/
+
+    run_flake8:
+        working_directory: ~/circleci-sqlitecache
+        docker:
+            - image: circleci/python:3.8.5
+        environment:
+            PIPENV_VENV_IN_PROJECT: true
+            GIT_LFS_SKIP_SMUDGE: 1
+        steps:
+            - common_setup:
+                after_setup:
+                    - run:
+                        name: run flake8 and record any warnings/errors
+                        command: |
+                            pipenv run flake8 \
+                                --extend-exclude .venv/ \
+                                --tee \
+                                --output ~/circleci-sqlitecache/test-results/flake8/flake8.txt \
+                            || true
+                            pipenv run flake8_junit \
+                                ~/circleci-sqlitecache/test-results/flake8/flake8.txt \
+                                ~/circleci-sqlitecache/test-results/flake8/flake8_junit.xml \
+                            || true
+                        when: always
+                    - persist_to_workspace:
+                        root: ~/
+                        paths:
+                            - circleci-sqlitecache/test-results/flake8/
+            - store_test_artifacts:
+                test_name: "flake8"
+
+    run_black:
+        working_directory: ~/circleci-sqlitecache
+        docker:
+            - image: circleci/python:3.8.5
+        environment:
+            PIPENV_VENV_IN_PROJECT: true
+            GIT_LFS_SKIP_SMUDGE: 1
+        steps:
+            - common_setup:
+                after_setup:
+                    - run:
+                        name: run black and record a diff if needed
+                        command: |
+                            pipenv run black \
+                                --target-version py38 \
+                                --diff \
+                                . \
+                            | tee ~/circleci-sqlitecache/test-results/black/black.diff \
+                            | pipenv run util/patch2xunit.py \
+                                --output ~/circleci-sqlitecache/test-results/black.xml \
+                                --log-file ~/circleci-sqlitecache/test-results/patch2xunit.log
+                        when: always
+                    - persist_to_workspace:
+                        root: ~/
+                        paths:
+                            - circleci-sqlitecache/test-results/black/
+            - store_test_artifacts:
+                test_name: "black"
+
+    run_tests:
+        working_directory: ~/circleci-sqlitecache
+        docker:
+            - image: circleci/python:3.8.5
+        environment:
+            PIPENV_VENV_IN_PROJECT: true
+            GIT_LFS_SKIP_SMUDGE: 1
+        steps:
+            - common_setup:
+                after_setup:
+                    - run:
+                        name: run test_harness.py
+                        command: |
+                            pipenv run ./test_harness.py \
+                                --output-dir ~/circleci-sqlitecache/test-results/unittest \
+                                --log-level info \
+                                --test-log-level debug \
+                                --test-level full
+                        when: always
+                    - persist_to_workspace:
+                        root: ~/
+                        paths:
+                            - circleci-sqlitecache/test-results/unittest/
+            - store_test_artifacts:
+                test_name: "unittests"
+
+workflows:
+    version: 2
+    build:
+        jobs:
+            - get_code
+            - get_lfs:
+                requires:
+                    - get_code
+            - get_venv:
+                requires:
+                    - get_code
+            - run_flake8:
+                requires:
+                    - get_code
+                    - get_venv
+            - run_black:
+                requires:
+                    - get_code
+                    - get_venv
+            - run_tests:
+                requires:
+                    - get_code
+                    - get_lfs
+                    - get_venv
