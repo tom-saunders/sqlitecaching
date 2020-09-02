@@ -11,13 +11,13 @@ log.addHandler(logging.NullHandler())
 class CacheDict(UserDict):
     __internally_constructed = object()
 
-    __ANON_MEM_PATH = ":memory:"
-    __ANON_DISK_PATH = ""
+    _ANON_MEM_PATH = ":memory:"
+    _ANON_DISK_PATH = ""
 
     # Not including
     # "detect_types",
     # as that should be dependant on mapping(?)
-    __PASSTHROUGH_PARAMS = [
+    _PASSTHROUGH_PARAMS = [
         "timeout",
         "isolation_level",
         "factory",
@@ -55,7 +55,7 @@ class CacheDict(UserDict):
 
         cleaned_params = {}
         for (param, value) in sqlite_params.items():
-            if param in cls.__PASSTHROUGH_PARAMS:
+            if param in cls._PASSTHROUGH_PARAMS:
                 if value:
                     cleaned_params[param] = value
                 else:
@@ -77,7 +77,7 @@ class CacheDict(UserDict):
 
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params=sqlite_params)
 
-        conn = sqlite3.connect(cls.__ANON_MEM_PATH, **cleaned_sqlite_params)
+        conn = sqlite3.connect(cls._ANON_MEM_PATH, **cleaned_sqlite_params)
 
         return CacheDict(
             conn=conn,
@@ -91,7 +91,7 @@ class CacheDict(UserDict):
         log.info("open anon disk")
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params=sqlite_params)
 
-        conn = sqlite3.connect(cls.__ANON_DISK_PATH, **cleaned_sqlite_params)
+        conn = sqlite3.connect(cls._ANON_DISK_PATH, **cleaned_sqlite_params)
 
         return CacheDict(
             conn=conn,
@@ -209,7 +209,7 @@ class CacheDictMapping:
         self._create_statement = None
 
     # fmt: off
-    __CREATE_FMT = (
+    _CREATE_FMT = (
         "-- sqlitecaching create table\n"
         "CREATE TABLE {table_identifier}\n"
         "(\n"
@@ -220,7 +220,7 @@ class CacheDictMapping:
         "    {primary_key_definition}\n"
         ");\n"
     )
-    __PRIMARY_KEY_FMT = (
+    _PRIMARY_KEY_FMT = (
         "PRIMARY KEY (\n"
         "        {primary_key_columns}\n"
         "    ) ON CONFLICT ABORT"
@@ -255,11 +255,11 @@ class CacheDictMapping:
         # fmt: on
 
         primary_key_columns = ",\n        ".join(key_columns)
-        primary_key_definition = self.__PRIMARY_KEY_FMT.format(
+        primary_key_definition = self._PRIMARY_KEY_FMT.format(
             primary_key_columns=primary_key_columns
         )
 
-        self._create_statement = self.__CREATE_FMT.format(
+        self._create_statement = self._CREATE_FMT.format(
             table_identifier=table_identifier,
             key_column_definitions=key_column_definitions,
             value_column_definitions=value_column_definitions,
@@ -274,7 +274,7 @@ class CacheDictMapping:
         column_dict[validated_name] = validated_sqltype
 
     # fmt: off
-    __IDENTIFIER_RE_DEFN = (
+    _IDENTIFIER_RE_DEFN = (
         r"^               # start of string""\n"
         r"[a-z]           # start with an ascii letter""\n"
         r"[a-z0-9_]{0,62} # followed by up to 62 alphanumeric or underscores""\n"
@@ -282,8 +282,8 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    __IDENTIFIER_PATTERN = re.compile(
-        __IDENTIFIER_RE_DEFN, flags=(re.ASCII | re.IGNORECASE | re.VERBOSE),
+    _IDENTIFIER_PATTERN = re.compile(
+        _IDENTIFIER_RE_DEFN, flags=(re.ASCII | re.IGNORECASE | re.VERBOSE),
     )
 
     @classmethod
@@ -297,16 +297,16 @@ class CacheDictMapping:
                 identifier,
             )
             identifier = identifier.strip()
-        match = cls.__IDENTIFIER_PATTERN.match(identifier)
+        match = cls._IDENTIFIER_PATTERN.match(identifier)
         if not match:
             fmt = (
                 "sqlitecaching identifier provided: [%s] does not match "
                 "requirements [%s]"
             )
             log.error(
-                fmt, identifier, cls.__IDENTIFIER_RE_DEFN,
+                fmt, identifier, cls._IDENTIFIER_RE_DEFN,
             )
-            raise CacheDictException(fmt % (identifier, cls.__IDENTIFIER_RE_DEFN))
+            raise CacheDictException(fmt % (identifier, cls._IDENTIFIER_RE_DEFN))
         lower_identifier = identifier.lower()
         if identifier != lower_identifier:
             log.warning(
@@ -333,16 +333,16 @@ class CacheDictMapping:
             sqltype = sqltype.strip()
         if not sqltype:
             return ""
-        match = cls.__IDENTIFIER_PATTERN.match(sqltype)
+        match = cls._IDENTIFIER_PATTERN.match(sqltype)
         if not match:
             fmt = (
                 "sqlitecaching sqltype provided: [%s] does not match "
                 "requirements [%s]"
             )
             log.error(
-                fmt, sqltype, cls.__IDENTIFIER_RE_DEFN,
+                fmt, sqltype, cls._IDENTIFIER_RE_DEFN,
             )
-            raise CacheDictException(fmt % (sqltype, cls.__IDENTIFIER_RE_DEFN))
+            raise CacheDictException(fmt % (sqltype, cls._IDENTIFIER_RE_DEFN))
         upper_sqltype = sqltype.upper()
         if sqltype != upper_sqltype:
             log.warning(
