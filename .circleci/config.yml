@@ -11,27 +11,49 @@ jobs:
         steps:
             - run:
                 command: |
-                    sudo apt install git-lfs
+                    sudo apt install \
+                        git-lfs
+
                     git lfs install
+                    sudo chown -R circleci:circleci /usr/local/bin
+                    sudo chown -R circleci:circleci /usr/local/lib/python3.8/site-packages
+                    sudo pip install pipenv
             - checkout
-            - run: sudo chown -R circleci:circleci /usr/local/bin
-            - run: sudo chown -R circleci:circleci /usr/local/lib/python3.8/site-packages
-            - run: |
-                git lfs ls-files -l | cut -d ' ' -f1 | sort > .lfs-idents
+            - run:
+                command: |
+                    git lfs ls-files -l | cut -d ' ' -f1 | sort > .lfs-idents
+            - run:
+                command: |
+                    mkdir -p ~/circleci-sqlitecache/test-results
+                    touch ~/circleci-sqlitecache/test-results/file.pre
+                    touch ~/circleci-sqlitecache/test-results/file.mid
+                    touch ~/circleci-sqlitecache/test-results/file.lfs
+                    touch ~/circleci-sqlitecache/test-results/file.pev
+                    touch ~/circleci-sqlitecache/test-results/file.aft
+                    touch ~/circleci-sqlitecache/test-results/file.end
+                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.pre
             - restore_cache:
                 key: v1-lfs-{{ .Branch }}-{{ checksum ".lfs-idents" }}
-            - run: |
-                git lfs pull
-            - save_cache:
-                key: v1-lfs-{{ .Branch }}-{{ checksum ".lfs-idents" }}
-                paths:
-                    - .git/lfs
             - restore_cache:
                 key: deps9-{{ .Branch }}-{{ checksum "Pipfile.lock" }}
             - run:
                 command: |
-                    sudo pip install pipenv
+                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.mid
+            - run: |
+                git lfs pull
+            - run:
+                command: |
+                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.lfs
+            - save_cache:
+                key: v1-lfs-{{ .Branch }}-{{ checksum ".lfs-idents" }}
+                paths:
+                    - .git/lfs
+            - run:
+                command: |
                     pipenv install --dev
+            - run:
+                command: |
+                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.pev
             - save_cache: # cache Python dependencies using checksum of Pipfile as the cache-key
                 key: deps9-{{ .Branch }}-{{ checksum "Pipfile.lock" }}
                 paths:
@@ -59,6 +81,7 @@ jobs:
                     pipenv run flake8_junit \
                         ~/circleci-sqlitecache/test-results/flake8/flake8.txt \
                         ~/circleci-sqlitecache/test-results/flake8/flake8_junit.xml
+                    find ~/ | sort > ~/circleci-sqlitecache/test-results/file.end
             - store_test_results:
                 path: ~/circleci-sqlitecache/test-results
             - store_artifacts:
