@@ -410,7 +410,8 @@ class CacheDictMapping:
         else:
             all_columns += " -- key\n    "
             all_columns += "-- no values defined"
-            upsert_stmt = " -- no conflict action as no values defined"
+            upsert_stmt = " DO NOTHING\n"
+            upsert_stmt += "-- no conflict action as no values defined"
 
         all_values = ",\n    ".join(
             ["?" for _ in range(0, len(key_column_names) + len(value_column_names))]

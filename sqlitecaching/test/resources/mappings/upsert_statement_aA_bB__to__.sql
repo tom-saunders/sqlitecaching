@@ -9,5 +9,6 @@ INSERT INTO 'aa_bb'
     -- all values
     ?,
     ?
-) -- no conflict action as no values defined
+) DO NOTHING
+-- no conflict action as no values defined
 ;
