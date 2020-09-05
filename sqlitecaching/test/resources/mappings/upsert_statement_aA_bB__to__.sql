@@ -1,13 +1,11 @@
 -- sqlitecaching insert or update into table
-INSERT INTO aa_bb
+INSERT INTO 'aa_bb'
 (
     -- all_columns
-    a, -- key
-    b, -- key
-
+    'a', -- key
+    'b', -- key
 ) VALUES (
     -- all_values
     ?,
     ?,
-
 );

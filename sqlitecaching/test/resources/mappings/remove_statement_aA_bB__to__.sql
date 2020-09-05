@@ -1,12 +1,11 @@
 -- sqlitecaching remove from table
-DELETE FROM aa_bb
+DELETE FROM 'aa_bb'
 WHERE (
     -- key_columns
     'a', -- key
-    'b'
+    'b' -- key
 ) = (
     -- key_values
     ?,
     ?,
-
 );

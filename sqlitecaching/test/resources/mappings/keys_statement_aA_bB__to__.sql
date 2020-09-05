@@ -2,4 +2,4 @@
 SELECT
     'a', -- key
     'b' --key
-FROM aa_bb;
+FROM 'aa_bb';
