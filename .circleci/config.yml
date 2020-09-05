@@ -223,7 +223,7 @@ jobs:
                         paths:
                             - circleci-sqlitecache/test-results/unittest/
             - store_test_artifacts:
-                test_name: "unittests"
+                test_name: "unittest"
 
 workflows:
     version: 2
