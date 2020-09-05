@@ -36,18 +36,37 @@ class TestCacheDictMapping(CacheDictTestBase):
 
     create_mapping_success_params = [
         Def(
-            name="aA_bB__to__",
-            input=In(table="aA_bB", keys={"a": "A", "b": "B"}, values={},),
+            name="aA__to__",
+            input=In(table="aa", keys={"a": "A"}, values={},),
+            expected=Statements(),
+        ),
+        Def(
+            name="aA__to__bB",
+            input=In(table="aa__bb", keys={"a": "A"}, values={"b": "B"},),
             expected=Statements(),
         ),
         Def(
             name="aA_bB__to__",
-            input=In(table="aa_bb", keys={"a": "a", "b": "b"}, values={},),
+            input=In(table="aa_bb", keys={"a": "A", "b": "B"}, values={},),
+            expected=Statements(),
+        ),
+        Def(
+            name="aA_bB__to__",
+            input=In(table="aA_bB", keys={"a": "a", "b": "b"}, values={},),
             expected=Statements(),
         ),
         Def(
             name="aA_bB__to__cC",
             input=In(table="aa_bb__cc", keys={"a": "a", "b": "b"}, values={"c": "C"}),
+            expected=Statements(),
+        ),
+        Def(
+            name="aA_bB__to__cC_dD",
+            input=In(
+                table="aa_bb__cc_dd",
+                keys={"a": "a", "b": "b"},
+                values={"c": "C", "d": "D"},
+            ),
             expected=Statements(),
         ),
     ]
