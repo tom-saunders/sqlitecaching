@@ -10,7 +10,7 @@ from sqlitecaching.config import UTCFormatter
 # import xml.etree.ElementTree as ET
 
 
-log = logging.getlogger(__name__)
+log = logging.getLogger(__name__)
 
 
 def handle_arguments():
@@ -73,7 +73,7 @@ __FILE_PATCH_FIRST_LINE_PATTERN = re.compile(
     re.VERBOSE)
 __FILE_PATCH_SECOND_LINE_PATTERN = re.compile(
     r"^        # start of line""\n"
-    r"+++      # after marker for diff""\n"
+    r"[+][+][+]# after marker for diff""\n"
     r"[ ]      # single literal space""\n"
     r"(        # capturing group (filename)""\n"
     r"  [^\t]+ # ""\n"
@@ -120,6 +120,8 @@ def process_input_from_file(*, in_file):
         # ^--- file/name.py<TAB>YYYY-MM-DD HH:MM_SS.uuuuuu +OOOO
         match = __FILE_PATCH_FIRST_LINE_PATTERN.match(line)
         if not match:
+            log.info("input line does not match patch first line format, skip")
+            log.debug("input line was [%s]", line)
             continue
         file_name = match.group(1)
         second_line = in_file.readline()

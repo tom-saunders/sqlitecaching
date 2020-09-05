@@ -188,7 +188,7 @@ jobs:
                                 --diff \
                                 . \
                             | tee ~/circleci-sqlitecache/test-results/black/black.diff \
-                            | pipenv run util/patch2xunit.py \
+                            | pipenv run python -m utils.patch2xunit \
                                 --output ~/circleci-sqlitecache/test-results/black.xml \
                                 --log-file ~/circleci-sqlitecache/test-results/patch2xunit.log
                         when: always
