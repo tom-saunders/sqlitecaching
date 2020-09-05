@@ -245,7 +245,7 @@ class CacheDictMapping:
         if self._create_statement:
             return self._create_statement
 
-        table_identifier = self.mapping_tuple.table
+        table_identifier = f"'{self.mapping_tuple.table}'"
 
         keys = self.mapping_tuple.keys
         key_columns = sorted(keys._fields)
@@ -301,7 +301,7 @@ class CacheDictMapping:
         if self._clear_statement:
             return self._clear_statement
 
-        table_identifier = self.mapping_tuple.table
+        table_identifier = f"'{self.mapping_tuple.table}'"
 
         unstripped_clear_statement = self._CLEAR_FMT.format(
             table_identifier=table_identifier
@@ -326,7 +326,7 @@ class CacheDictMapping:
         if self._delete_statement:
             return self._delete_statement
 
-        table_identifier = self.mapping_tuple.table
+        table_identifier = f"'{self.mapping_tuple.table}'"
 
         unstripped_delete_statement = self._DELETE_FMT.format(
             table_identifier=table_identifier
@@ -371,7 +371,7 @@ class CacheDictMapping:
         if self._upsert_statement:
             return self._upsert_statement
 
-        table_identifier = self.mapping_tuple.table
+        table_identifier = f"'{self.mapping_tuple.table}'"
 
         keys = self.mapping_tuple.keys
         key_column_names = sorted(keys._fields)
@@ -446,7 +446,7 @@ class CacheDictMapping:
         if self._remove_statement:
             return self._remove_statement
 
-        table_identifier = self.mapping_tuple.table
+        table_identifier = f"'{self.mapping_tuple.table}'"
 
         keys = self.mapping_tuple.keys
         key_column_names = sorted(keys._fields)
@@ -481,7 +481,7 @@ class CacheDictMapping:
         if self._length_statement:
             return self._length_statement
 
-        table_identifier = self.mapping_tuple.table
+        table_identifier = f"'{self.mapping_tuple.table}'"
 
         unstripped_length_statement = self._LENGTH_FMT.format(
             table_identifier=table_identifier,
@@ -508,7 +508,7 @@ class CacheDictMapping:
         if self._keys_statement:
             return self._keys_statement
 
-        table_identifier = self.mapping_tuple.table
+        table_identifier = f"'{self.mapping_tuple.table}'"
 
         keys = self.mapping_tuple.keys
         key_column_names = sorted(keys._fields)
@@ -542,7 +542,7 @@ class CacheDictMapping:
         if self._items_statement:
             return self._items_statement
 
-        table_identifier = self.mapping_tuple.table
+        table_identifier = f"'{self.mapping_tuple.table}'"
 
         keys = self.mapping_tuple.keys
         key_column_names = sorted(keys._fields)
@@ -583,7 +583,7 @@ class CacheDictMapping:
         if self._values_statement:
             return self._values_statement
 
-        table_identifier = self.mapping_tuple.table
+        table_identifier = f"'{self.mapping_tuple.table}'"
 
         values = self.mapping_tuple.values
         value_column_names = sorted(values._fields)
