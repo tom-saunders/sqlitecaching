@@ -269,7 +269,7 @@ class CacheDictMapping:
                     for column in value_columns
                 ]
             )
-            value_column_definitions += ", --value"
+            value_column_definitions += ", -- value"
         else:
             value_column_definitions = "-- no values defined"
         # fmt: on
@@ -363,14 +363,13 @@ class CacheDictMapping:
         " ON CONFLICT (\n"
         "    -- key columns\n"
         "    {key_columns}\n"
-        ")\n"
-        "DO UPDATE SET (\n"
-        "    -- value_columns\n"
+        ") DO UPDATE SET (\n"
+        "    -- value columns\n"
         "    {value_columns}\n"
         ") = (\n"
-        "    -- value_values\n"
+        "    -- value values\n"
         "    {value_values}\n"
-        ")\n"
+        ")"
     )
     # fmt: on
 
@@ -390,17 +389,19 @@ class CacheDictMapping:
         key_columns += "', -- key\n    '".join(key_column_names)
         key_columns += "'"
         all_columns = key_columns
+        key_columns += " -- key"
 
         if value_column_names:
             all_columns += ", -- key\n    "
             value_columns = "'"
             value_columns += "', -- value\n    '".join(value_column_names)
-            value_columns += "'"
+            value_columns += "' -- value"
             all_columns += value_columns
 
-            value_values = ",\n    ".join(
-                [f"'excluded.{c}'" for c in value_column_names]
+            value_values = ", -- value\n    ".join(
+                [f"excluded.'{c}'" for c in value_column_names]
             )
+            value_values += " -- value"
 
             upsert_stmt = self._UPSERT_STMT_FMT.format(
                 value_columns=value_columns,
@@ -591,8 +592,9 @@ class CacheDictMapping:
         values = self.mapping_tuple.values
         value_column_names = sorted(values._fields)
         if value_column_names:
-            value_columns = ", -- value\n    ".join(value_column_names)
-            value_columns += " -- value"
+            value_columns = "'"
+            value_columns += "', -- value\n    '".join(value_column_names)
+            value_columns += "' -- value"
         else:
             value_columns = "null -- null value to permit querying"
 

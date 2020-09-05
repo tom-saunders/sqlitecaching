@@ -45,6 +45,11 @@ class TestCacheDictMapping(CacheDictTestBase):
             input=In(table="aa_bb", keys={"a": "a", "b": "b"}, values={},),
             expected=Statements(),
         ),
+        Def(
+            name="aA_bB__to__cC",
+            input=In(table="aa_bb__cc", keys={"a": "a", "b": "b"}, values={"c": "C"}),
+            expected=Statements(),
+        ),
     ]
 
     @parameterized.parameterized.expand(create_mapping_success_params)
