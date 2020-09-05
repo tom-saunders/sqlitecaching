@@ -12,6 +12,10 @@ log.addHandler(logging.NullHandler())
 
 @test_level(TestLevel.PRE_COMMIT)
 class TestCacheDictMapping(CacheDictTestBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.res_dir += "mappings/"
+
     Def = namedtuple("Def", ["name", "input", "expected"])
     In = CacheDictMappingTuple
     Statements = namedtuple(
@@ -27,17 +31,17 @@ class TestCacheDictMapping(CacheDictTestBase):
             "items_statement",
             "values_statement",
         ],
-        defaults=[None for _ in range(0, 9)],
+        defaults=[True for _ in range(0, 2)] + [False for _ in range(2, 9)],
     )
 
     create_mapping_success_params = [
         Def(
-            name="why",
+            name="aA_bB__to__",
             input=In(table="aA_bB", keys={"a": "A", "b": "B"}, values={},),
             expected=Statements(),
         ),
         Def(
-            name="who",
+            name="aA_bB__to__",
             input=In(table="aa_bb", keys={"a": "a", "b": "b"}, values={},),
             expected=Statements(),
         ),
@@ -53,12 +57,14 @@ class TestCacheDictMapping(CacheDictTestBase):
 
         for statement_type in expected._fields:
             with self.subTest(name=name, statement_type=statement_type):
-                expected_statement_path = getattr(expected, statement_type)
+                expected_statement = getattr(expected, statement_type)
                 # FIXME remove after test dev done.
-                if not expected_statement_path:
+                if not expected_statement:
                     continue
+                expected_statement_name = f"{statement_type}_{name}.sql"
+                expected_statement_path = self.res_dir + expected_statement_name
                 # FIXME change to 'r' after test dev done.
-                with open(expected_statement_path, "rw+") as expected_statement_file:
+                with open(expected_statement_path, "w+") as expected_statement_file:
                     expected_statement = expected_statement_file.read()
                     actual_statement = getattr(actual, statement_type)()
                     # FIXME remove after test dev done.

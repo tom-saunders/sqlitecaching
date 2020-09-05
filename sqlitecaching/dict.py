@@ -164,7 +164,7 @@ class CacheDictMapping:
             log.error(fmt)
             raise CacheDictException(fmt)
 
-        validated_table = self._validate_identifier(table)
+        validated_table = self._validate_identifier(identifier=table)
         if validated_table.startswith("sqlite_"):
             fmt = "table cannot start with sqlite_ : [%s]"
             log.error(fmt, validated_table)
@@ -175,17 +175,23 @@ class CacheDictMapping:
         keyval_columns = []
 
         for (name, sqltype) in keys.items():
-            validated_name = self._validate_identifier(name)
-            self._handle_column(key_columns, validated_name, sqltype)
+            validated_name = self._validate_identifier(identifier=name)
+            self._handle_column(
+                column_dict=key_columns, validated_name=validated_name, sqltype=sqltype
+            )
 
         unset_value = object()
         for (name, sqltype) in values.items():
-            validated_name = self._validate_identifier(name)
+            validated_name = self._validate_identifier(identifier=name)
             in_keys = key_columns.get(validated_name, unset_value)
             if in_keys is not unset_value:
                 keyval_columns.append(validated_name)
             else:
-                self._handle_column(value_columns, validated_name, sqltype)
+                self._handle_column(
+                    column_dict=value_columns,
+                    validated_name=validated_name,
+                    sqltype=sqltype,
+                )
 
         if keyval_columns:
             fmt = (
@@ -207,6 +213,7 @@ class CacheDictMapping:
         )
 
         self._create_statement = None
+        self._clear_statement = None
 
     # fmt: off
     _CREATE_FMT = (
@@ -259,18 +266,49 @@ class CacheDictMapping:
             primary_key_columns=primary_key_columns
         )
 
-        self._create_statement = self._CREATE_FMT.format(
+        unstripped_create_statement = self._CREATE_FMT.format(
             table_identifier=table_identifier,
             key_column_definitions=key_column_definitions,
             value_column_definitions=value_column_definitions,
             primary_key_definition=primary_key_definition,
         )
 
+        create_lines = []
+        for line in unstripped_create_statement.splitlines():
+            create_lines.append(line.rstrip())
+        # needed for trailing newline
+        create_lines.append("")
+        self._create_statement = "\n".join(create_lines)
         return self._create_statement
 
+    # fmt: off
+    _CLEAR_FMT = (
+        "-- sqlitecaching clear table\n"
+        "DELETE from {table_identifier};\n"
+    )
+    # fmt: on
+
+    def clear_statement(self):
+        if self._clear_statement:
+            return self._clear_statement
+
+        table_identifier = self.mapping_tuple.table
+
+        unstripped_clear_statement = self._CLEAR_FMT.format(
+            table_identifier=table_identifier
+        )
+
+        clear_lines = []
+        for line in unstripped_clear_statement.splitlines():
+            clear_lines.append(line.rstrip())
+        # needed for trailing newline
+        clear_lines.append("")
+        self._clear_statement = "\n".join(clear_lines)
+        return self._clear_statement
+
     @classmethod
-    def _handle_column(cls, column_dict, validated_name, sqltype, /):
-        validated_sqltype = cls._validate_sqltype(sqltype)
+    def _handle_column(cls, *, column_dict, validated_name, sqltype):
+        validated_sqltype = cls._validate_sqltype(sqltype=sqltype)
         column_dict[validated_name] = validated_sqltype
 
     # fmt: off
@@ -287,7 +325,7 @@ class CacheDictMapping:
     )
 
     @classmethod
-    def _validate_identifier(cls, identifier, /):
+    def _validate_identifier(cls, *, identifier):
         if identifier != identifier.strip():
             log.info(
                 (
@@ -321,7 +359,7 @@ class CacheDictMapping:
         return lower_identifier
 
     @classmethod
-    def _validate_sqltype(cls, sqltype, /):
+    def _validate_sqltype(cls, *, sqltype):
         if sqltype != sqltype.strip():
             log.info(
                 (
