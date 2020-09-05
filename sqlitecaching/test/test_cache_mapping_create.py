@@ -58,19 +58,9 @@ class TestCacheDictMapping(CacheDictTestBase):
         for statement_type in expected._fields:
             with self.subTest(name=name, statement_type=statement_type):
                 expected_statement = getattr(expected, statement_type)
-                # FIXME remove after test dev done.
-                if not expected_statement:
-                    continue
                 expected_statement_name = f"{statement_type}_{name}.sql"
                 expected_statement_path = self.res_dir + expected_statement_name
-                # FIXME change to 'r' after test dev done.
-                with open(expected_statement_path, "w+") as expected_statement_file:
+                with open(expected_statement_path, "r") as expected_statement_file:
                     expected_statement = expected_statement_file.read()
                     actual_statement = getattr(actual, statement_type)()
-                    # FIXME remove after test dev done.
-                    if not expected_statement:
-                        log.warn("stop being so lazy")
-                        expected_statement = actual_statement
-                        expected_statement_file.seek(0)
-                        expected_statement_file.write(expected_statement)
                     self.assertEqual(expected_statement, actual_statement)
