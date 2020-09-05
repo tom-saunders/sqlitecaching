@@ -1,6 +1,6 @@
 -- sqlitecaching table items
 SELECT
-    -- all_columns
+    -- all columns
     'a', -- key
     'b' -- key
 FROM 'aa_bb';

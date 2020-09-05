@@ -254,18 +254,24 @@ class CacheDictMapping:
         value_columns = sorted(values._fields)
 
         # fmt: off
-        key_column_definitions = "".join(
+        key_column_definitions = ", -- primary key\n    ".join(
             [
-                f"'{column}' {getattr(keys, column)}, -- primary key\n    "
+                f"'{column}' {getattr(keys, column)}"
                 for column in key_columns
             ]
         )
-        value_column_definitions = "".join(
-            [
-                f"'{column}' {getattr(values, column)}, -- value\n    "
-                for column in value_columns
-            ]
-        )
+        key_column_definitions += ", -- primary key"
+
+        if value_columns:
+            value_column_definitions = ", -- value\n    ".join(
+                [
+                    f"'{column}' {getattr(values, column)}"
+                    for column in value_columns
+                ]
+            )
+            value_column_definitions += ", --value"
+        else:
+            value_column_definitions = "-- no values defined"
         # fmt: on
 
         primary_key_columns = "'"
@@ -345,12 +351,13 @@ class CacheDictMapping:
         "-- sqlitecaching insert or update into table\n"
         "INSERT INTO {table_identifier}\n"
         "(\n"
-        "    -- all_columns\n"
+        "    -- all columns\n"
         "    {all_columns}\n"
         ") VALUES (\n"
-        "    -- all_values\n"
+        "    -- all values\n"
         "    {all_values}\n"
-        "){upsert_stmt};\n"
+        "){upsert_stmt}\n"
+        ";\n"
     )
     _UPSERT_STMT_FMT = (
         " ON CONFLICT (\n"
@@ -375,44 +382,39 @@ class CacheDictMapping:
 
         keys = self.mapping_tuple.keys
         key_column_names = sorted(keys._fields)
-        # fmt: off
-        key_columns = "".join(
-            [
-                f"{name}, -- key\n    "
-                for name in key_column_names
-            ]
-        )
-        # fmt: on
 
         values = self.mapping_tuple.values
         value_column_names = sorted(values._fields)
-        # fmt: off
-        value_columns = "".join(
-            [
-                f"{name}, -- value\n    "
-                for name in value_column_names
-            ]
-        )
-        value_values = "".join(
-            [
-                f"excluded.{name}, -- value\n    "
-                for name in value_column_names
-            ]
-        )
-        # fmt: on
 
-        all_columns = key_columns + value_columns
-        all_columns_count = len(key_column_names) + len(value_column_names)
-        all_values = "".join(["?,\n    " for _ in range(0, all_columns_count)])
+        key_columns = "'"
+        key_columns += "', -- key\n    '".join(key_column_names)
+        key_columns += "'"
+        all_columns = key_columns
 
-        upsert_stmt = ""
         if value_column_names:
+            all_columns += ", -- key\n    "
+            value_columns = "'"
+            value_columns += "', -- value\n    '".join(value_column_names)
+            value_columns += "'"
+            all_columns += value_columns
+
+            value_values = ",\n    ".join(
+                [f"'excluded.{c}'" for c in value_column_names]
+            )
+
             upsert_stmt = self._UPSERT_STMT_FMT.format(
                 value_columns=value_columns,
                 value_values=value_values,
                 key_columns=key_columns,
             )
+        else:
+            all_columns += " -- key\n    "
+            all_columns += "-- no values defined"
+            upsert_stmt = " -- no conflict action as no values defined"
 
+        all_values = ",\n    ".join(
+            ["?" for _ in range(0, len(key_column_names) + len(value_column_names))]
+        )
         unstripped_upsert_statement = self._UPSERT_FMT.format(
             table_identifier=table_identifier,
             all_columns=all_columns,
@@ -433,10 +435,10 @@ class CacheDictMapping:
         "-- sqlitecaching remove from table\n"
         "DELETE FROM {table_identifier}\n"
         "WHERE (\n"
-        "    -- key_columns\n"
+        "    -- key columns\n"
         "    {key_columns}\n"
         ") = (\n"
-        "    -- key_values\n"
+        "    -- key values\n"
         "    {key_values}\n"
         ");\n"
     )
@@ -452,10 +454,10 @@ class CacheDictMapping:
         key_column_names = sorted(keys._fields)
         key_columns = "'"
         key_columns += "', -- key\n    '".join(key_column_names)
-        key_columns += "'"
+        key_columns += "' -- key"
 
         key_columns_count = len(key_column_names)
-        key_values = "".join(["?,\n    " for _ in range(0, key_columns_count)])
+        key_values = ",\n    ".join(["?" for _ in range(0, key_columns_count)])
         unstripped_remove_statement = self._REMOVE_FMT.format(
             table_identifier=table_identifier,
             key_columns=key_columns,
@@ -514,7 +516,7 @@ class CacheDictMapping:
         key_column_names = sorted(keys._fields)
         key_columns = "'"
         key_columns += "', -- key\n    '".join(key_column_names)
-        key_columns += "' --key"
+        key_columns += "' -- key"
 
         unstripped_keys_statement = self._KEYS_FMT.format(
             key_columns=key_columns, table_identifier=table_identifier,
@@ -532,7 +534,7 @@ class CacheDictMapping:
     _ITEMS_FMT = (
         "-- sqlitecaching table items\n"
         "SELECT\n"
-        "    -- all_columns\n"
+        "    -- all columns\n"
         "    {all_columns}\n"
         "FROM {table_identifier};\n"
     )

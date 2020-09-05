@@ -5,6 +5,7 @@ CREATE TABLE 'aa_bb'
     'a' A, -- primary key
     'b' B, -- primary key
     -- values
+    -- no values defined
     PRIMARY KEY (
         'a',
         'b'
