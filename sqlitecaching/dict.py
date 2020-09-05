@@ -203,8 +203,8 @@ class CacheDictMapping:
             )
             raise CacheDictException(fmt % keyval_columns)
 
-        self.Keys = namedtuple("Keys", key_columns.keys())
-        self.Values = namedtuple("Values", value_columns.keys())
+        self.Keys = namedtuple("Keys", sorted(key_columns.keys()))
+        self.Values = namedtuple("Values", sorted(value_columns.keys()))
 
         self.key_info = self.Keys(**key_columns)
         self.value_info = self.Values(**value_columns)
@@ -216,6 +216,11 @@ class CacheDictMapping:
         self._clear_statement = None
         self._delete_statement = None
         self._upsert_statement = None
+        self._remove_statement = None
+        self._length_statement = None
+        self._keys_statement = None
+        self._items_statement = None
+        self._values_statement = None
 
     # fmt: off
     _CREATE_FMT = (
@@ -251,19 +256,21 @@ class CacheDictMapping:
         # fmt: off
         key_column_definitions = "".join(
             [
-                f"{column} {getattr(keys, column)}, -- primary key\n    "
+                f"'{column}' {getattr(keys, column)}, -- primary key\n    "
                 for column in key_columns
             ]
         )
         value_column_definitions = "".join(
             [
-                f"{column} {getattr(values, column)}, -- value\n    "
+                f"'{column}' {getattr(values, column)}, -- value\n    "
                 for column in value_columns
             ]
         )
         # fmt: on
 
-        primary_key_columns = ",\n        ".join(key_columns)
+        primary_key_columns = "'"
+        primary_key_columns += "',\n        '".join(key_columns)
+        primary_key_columns += "'"
         primary_key_definition = self._PRIMARY_KEY_FMT.format(
             primary_key_columns=primary_key_columns
         )
@@ -420,6 +427,183 @@ class CacheDictMapping:
         upsert_lines.append("")
         self._upsert_statement = "\n".join(upsert_lines)
         return self._upsert_statement
+
+    # fmt: off
+    _REMOVE_FMT = (
+        "-- sqlitecaching remove from table\n"
+        "DELETE FROM {table_identifier}\n"
+        "WHERE (\n"
+        "    -- key_columns\n"
+        "    {key_columns}\n"
+        ") = (\n"
+        "    -- key_values\n"
+        "    {key_values}\n"
+        ");\n"
+    )
+    # fmt: on
+
+    def remove_statement(self):
+        if self._remove_statement:
+            return self._remove_statement
+
+        table_identifier = self.mapping_tuple.table
+
+        keys = self.mapping_tuple.keys
+        key_column_names = sorted(keys._fields)
+        key_columns = "'"
+        key_columns += "', -- key\n    '".join(key_column_names)
+        key_columns += "'"
+
+        key_columns_count = len(key_column_names)
+        key_values = "".join(["?,\n    " for _ in range(0, key_columns_count)])
+        unstripped_remove_statement = self._REMOVE_FMT.format(
+            table_identifier=table_identifier,
+            key_columns=key_columns,
+            key_values=key_values,
+        )
+
+        remove_lines = []
+        for line in unstripped_remove_statement.splitlines():
+            remove_lines.append(line.rstrip())
+        # needed for trailing newline
+        remove_lines.append("")
+        self._remove_statement = "\n".join(remove_lines)
+        return self._remove_statement
+
+    # fmt: off
+    _LENGTH_FMT = (
+        "-- sqlitecaching table length\n"
+        "SELECT COUNT(*) FROM {table_identifier};\n"
+    )
+    # fmt: on
+
+    def length_statement(self):
+        if self._length_statement:
+            return self._length_statement
+
+        table_identifier = self.mapping_tuple.table
+
+        unstripped_length_statement = self._LENGTH_FMT.format(
+            table_identifier=table_identifier,
+        )
+
+        length_lines = []
+        for line in unstripped_length_statement.splitlines():
+            length_lines.append(line.rstrip())
+        # needed for trailing newline
+        length_lines.append("")
+        self._length_statement = "\n".join(length_lines)
+        return self._length_statement
+
+    # fmt: off
+    _KEYS_FMT = (
+        "-- sqlitecaching table keys\n"
+        "SELECT\n"
+        "    {key_columns}\n"
+        "FROM {table_identifier};\n"
+    )
+    # fmt: on
+
+    def keys_statement(self):
+        if self._keys_statement:
+            return self._keys_statement
+
+        table_identifier = self.mapping_tuple.table
+
+        keys = self.mapping_tuple.keys
+        key_column_names = sorted(keys._fields)
+        key_columns = "'"
+        key_columns += "', -- key\n    '".join(key_column_names)
+        key_columns += "' --key"
+
+        unstripped_keys_statement = self._KEYS_FMT.format(
+            key_columns=key_columns, table_identifier=table_identifier,
+        )
+
+        keys_lines = []
+        for line in unstripped_keys_statement.splitlines():
+            keys_lines.append(line.rstrip())
+        # needed for trailing newline
+        keys_lines.append("")
+        self._keys_statement = "\n".join(keys_lines)
+        return self._keys_statement
+
+    # fmt: off
+    _ITEMS_FMT = (
+        "-- sqlitecaching table items\n"
+        "SELECT\n"
+        "    -- all_columns\n"
+        "    {all_columns}\n"
+        "FROM {table_identifier};\n"
+    )
+    # fmt: on
+
+    def items_statement(self):
+        if self._items_statement:
+            return self._items_statement
+
+        table_identifier = self.mapping_tuple.table
+
+        keys = self.mapping_tuple.keys
+        key_column_names = sorted(keys._fields)
+        all_columns = "'"
+        all_columns += "', -- key\n    '".join(key_column_names)
+
+        values = self.mapping_tuple.values
+        value_column_names = sorted(values._fields)
+        if value_column_names:
+            all_columns += "', -- key\n    '"
+            all_columns += "', -- value\n    '".join(value_column_names)
+            all_columns += "' -- value"
+        else:
+            all_columns += "' -- key"
+
+        unstripped_items_statement = self._ITEMS_FMT.format(
+            all_columns=all_columns, table_identifier=table_identifier,
+        )
+
+        items_lines = []
+        for line in unstripped_items_statement.splitlines():
+            items_lines.append(line.rstrip())
+        # needed for trailing newline
+        items_lines.append("")
+        self._items_statement = "\n".join(items_lines)
+        return self._items_statement
+
+    # fmt: off
+    _VALUES_FMT = (
+        "-- sqlitecaching table values\n"
+        "SELECT\n"
+        "    {value_columns}\n"
+        "FROM {table_identifier};\n"
+    )
+    # fmt: on
+
+    def values_statement(self):
+        if self._values_statement:
+            return self._values_statement
+
+        table_identifier = self.mapping_tuple.table
+
+        values = self.mapping_tuple.values
+        value_column_names = sorted(values._fields)
+        if value_column_names:
+            value_columns = ", -- value\n    ".join(value_column_names)
+            value_columns += " -- value"
+        else:
+            value_columns = "null -- null value to permit querying"
+
+        unstripped_values_statement = self._VALUES_FMT.format(
+            value_columns=value_columns, table_identifier=table_identifier,
+        )
+
+        values_lines = []
+        for line in unstripped_values_statement.splitlines():
+            values_lines.append(line.rstrip())
+        # needed for trailing newline
+        values_lines.append("")
+        self._values_statement = "\n".join(values_lines)
+        return self._values_statement
 
     @classmethod
     def _handle_column(cls, *, column_dict, validated_name, sqltype):
