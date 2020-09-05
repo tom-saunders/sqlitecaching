@@ -86,5 +86,5 @@ class TestCacheDictMapping(CacheDictTestBase):
                 expected_statement_path = self.res_dir + expected_statement_name
                 with open(expected_statement_path, "r") as expected_statement_file:
                     expected_statement = expected_statement_file.read()
-                    actual_statement = getattr(actual, statement_type)()
-                    self.assertEqual(expected_statement, actual_statement)
+                actual_statement = getattr(actual, statement_type)()
+                self.assertEqual(expected_statement, actual_statement)
