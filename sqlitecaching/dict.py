@@ -215,6 +215,7 @@ class CacheDictMapping:
         self._create_statement = None
         self._clear_statement = None
         self._delete_statement = None
+        self._upsert_statement = None
 
     # fmt: off
     _CREATE_FMT = (
@@ -309,7 +310,7 @@ class CacheDictMapping:
 
     # fmt: off
     _DELETE_FMT = (
-        "-- sqlitecaching clear table\n"
+        "-- sqlitecaching delete table\n"
         "DROP TABLE {table_identifier};\n"
     )
     # fmt: on
@@ -320,7 +321,7 @@ class CacheDictMapping:
 
         table_identifier = self.mapping_tuple.table
 
-        unstripped_delete_statement = self._CLEAR_FMT.format(
+        unstripped_delete_statement = self._DELETE_FMT.format(
             table_identifier=table_identifier
         )
 
@@ -331,6 +332,94 @@ class CacheDictMapping:
         delete_lines.append("")
         self._delete_statement = "\n".join(delete_lines)
         return self._delete_statement
+
+    # fmt: off
+    _UPSERT_FMT = (
+        "-- sqlitecaching insert or update into table\n"
+        "INSERT INTO {table_identifier}\n"
+        "(\n"
+        "    -- all_columns\n"
+        "    {all_columns}\n"
+        ") VALUES (\n"
+        "    -- all_values\n"
+        "    {all_values}\n"
+        "){upsert_stmt};\n"
+    )
+    _UPSERT_STMT_FMT = (
+        " ON CONFLICT (\n"
+        "    -- key columns\n"
+        "    {key_columns}\n"
+        ")\n"
+        "DO UPDATE SET (\n"
+        "    -- value_columns\n"
+        "    {value_columns}\n"
+        ") = (\n"
+        "    -- value_values\n"
+        "    {value_values}\n"
+        ")\n"
+    )
+    # fmt: on
+
+    def upsert_statement(self):
+        if self._upsert_statement:
+            return self._upsert_statement
+
+        table_identifier = self.mapping_tuple.table
+
+        keys = self.mapping_tuple.keys
+        key_column_names = sorted(keys._fields)
+        # fmt: off
+        key_columns = "".join(
+            [
+                f"{name}, -- key\n    "
+                for name in key_column_names
+            ]
+        )
+        # fmt: on
+
+        values = self.mapping_tuple.values
+        value_column_names = sorted(values._fields)
+        # fmt: off
+        value_columns = "".join(
+            [
+                f"{name}, -- value\n    "
+                for name in value_column_names
+            ]
+        )
+        value_values = "".join(
+            [
+                f"excluded.{name}, -- value\n    "
+                for name in value_column_names
+            ]
+        )
+        # fmt: on
+
+        all_columns = key_columns + value_columns
+        all_columns_count = len(key_column_names) + len(value_column_names)
+        all_values = "".join(["?,\n    " for _ in range(0, all_columns_count)])
+
+        upsert_stmt = ""
+        if value_column_names:
+            upsert_stmt = self._UPSERT_STMT_FMT.format(
+                value_columns=value_columns,
+                value_values=value_values,
+                key_columns=key_columns,
+            )
+
+        unstripped_upsert_statement = self._UPSERT_FMT.format(
+            table_identifier=table_identifier,
+            all_columns=all_columns,
+            all_values=all_values,
+            upsert_stmt=upsert_stmt,
+        )
+
+        upsert_lines = []
+        for line in unstripped_upsert_statement.splitlines():
+            upsert_lines.append(line.rstrip())
+        # needed for trailing newline
+        upsert_lines.append("")
+        self._upsert_statement = "\n".join(upsert_lines)
+        return self._upsert_statement
 
     @classmethod
     def _handle_column(cls, *, column_dict, validated_name, sqltype):

@@ -1,2 +1,2 @@
--- sqlitecaching clear table
-DELETE from aa_bb;
+-- sqlitecaching delete table
+DROP TABLE aa_bb;
