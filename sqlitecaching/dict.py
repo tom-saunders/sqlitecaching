@@ -214,6 +214,7 @@ class CacheDictMapping:
 
         self._create_statement = None
         self._clear_statement = None
+        self._delete_statement = None
 
     # fmt: off
     _CREATE_FMT = (
@@ -305,6 +306,31 @@ class CacheDictMapping:
         clear_lines.append("")
         self._clear_statement = "\n".join(clear_lines)
         return self._clear_statement
+
+    # fmt: off
+    _DELETE_FMT = (
+        "-- sqlitecaching clear table\n"
+        "DROP TABLE {table_identifier};\n"
+    )
+    # fmt: on
+
+    def delete_statement(self):
+        if self._delete_statement:
+            return self._delete_statement
+
+        table_identifier = self.mapping_tuple.table
+
+        unstripped_delete_statement = self._CLEAR_FMT.format(
+            table_identifier=table_identifier
+        )
+
+        delete_lines = []
+        for line in unstripped_delete_statement.splitlines():
+            delete_lines.append(line.rstrip())
+        # needed for trailing newline
+        delete_lines.append("")
+        self._delete_statement = "\n".join(delete_lines)
+        return self._delete_statement
 
     @classmethod
     def _handle_column(cls, *, column_dict, validated_name, sqltype):

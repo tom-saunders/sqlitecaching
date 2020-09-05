@@ -31,7 +31,7 @@ class TestCacheDictMapping(CacheDictTestBase):
             "items_statement",
             "values_statement",
         ],
-        defaults=[True for _ in range(0, 2)] + [False for _ in range(2, 9)],
+        defaults=[True for _ in range(0, 3)] + [False for _ in range(3, 9)],
     )
 
     create_mapping_success_params = [
