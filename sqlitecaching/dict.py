@@ -38,13 +38,28 @@ CacheDictMappingInvalidIdentifierException = __CDME.register_cause(
     req_params=["identifier", "re"],
 )
 CacheDictMappingKeyValOverlapException = __CDME.register_cause(
-    cause_name=f"{__name__}.KeyValueColumnOverlapException",
+    cause_name=f"{__name__}.KeyValColumnOverlapException",
     cause_id=3,
     fmt=(
         "the sets of key columns and value columns must be disjoint. columns [%s] "
         "occur in both key and value sets"
     ),
     req_params=["columns"],
+)
+CacheDictMappingNoIdentifierProvidedException = __CDME.register_cause(
+    cause_name=f"{__name__}.NoIdentifierProvidedException",
+    cause_id=4,
+    fmt="The identifier provided: [%s] does not have a value.",
+    req_params=["identifier"],
+)
+CacheDictMappingDuplicateKeyNameException = __CDME.register_cause(
+    cause_name=f"{__name__}.DuplicateKeyNameException",
+    cause_id=5,
+    fmt=(
+        "The key column identifier provided: [%s] has already been added (as "
+        "[%s], after casefold())"
+    ),
+    req_params=["identifier", "validated_identifier"],
 )
 
 
@@ -211,13 +226,21 @@ class CacheDictMapping:
         value_columns = collections.OrderedDict()
         keyval_columns = []
 
+        unset_value = object()
         for (name, sqltype) in keys.items():
             validated_name = self._validate_identifier(identifier=name)
-            self._handle_column(
-                column_dict=key_columns, validated_name=validated_name, sqltype=sqltype
-            )
+            in_keys = key_columns.get(validated_name, unset_value)
+            if in_keys is not unset_value:
+                raise CacheDictMappingDuplicateKeyNameException(
+                    params={"identifier": name, "validated_identifier": validated_name}
+                )
+            else:
+                self._handle_column(
+                    column_dict=key_columns,
+                    validated_name=validated_name,
+                    sqltype=sqltype,
+                )
 
-        unset_value = object()
         for (name, sqltype) in values.items():
             validated_name = self._validate_identifier(identifier=name)
             in_keys = key_columns.get(validated_name, unset_value)
@@ -661,6 +684,11 @@ class CacheDictMapping:
 
     @classmethod
     def _validate_identifier(cls, *, identifier):
+        if not identifier:
+            raise CacheDictMappingNoIdentifierProvidedException(
+                params={"identifier": identifier}
+            )
+
         if identifier != identifier.strip():
             log.info(
                 (
