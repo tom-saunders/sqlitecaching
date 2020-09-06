@@ -37,6 +37,15 @@ CacheDictMappingInvalidIdentifierException = __CDME.register_cause(
     ),
     req_params=["identifier", "re"],
 )
+CacheDictMappingKeyValOverlapException = __CDME.register_cause(
+    cause_name=f"{__name__}.KeyValueColumnOverlapException",
+    cause_id=3,
+    fmt=(
+        "the sets of key columns and value columns must be disjoint. columns [%s] "
+        "occur in both key and value sets"
+    ),
+    req_params=["columns"],
+)
 
 
 class CacheDict(UserDict):
@@ -194,8 +203,6 @@ class CacheDictMapping:
 
         validated_table = self._validate_identifier(identifier=table)
         if validated_table.startswith("sqlite_"):
-            fmt = "table cannot start with sqlite_ : [%s]"
-            log.error(fmt, validated_table)
             raise CacheDictMappingReservedTableException(
                 params={"table_name": validated_table}
             )
@@ -224,14 +231,8 @@ class CacheDictMapping:
                 )
 
         if keyval_columns:
-            fmt = (
-                "the sets of key columns and value columns must be disjoint. "
-                "columns [%s] occur in both key and value sets"
-            )
-            log.error(
-                fmt, keyval_columns,
-            )
-            raise CacheDictException(fmt % keyval_columns)
+            keyval_str = "'" + "', '".join(keyval_columns) + "'"
+            raise CacheDictMappingKeyValOverlapException(params={"columns": keyval_str})
 
         self.Keys = namedtuple("Keys", sorted(key_columns.keys()))
         self.Values = namedtuple("Values", sorted(value_columns.keys()))
