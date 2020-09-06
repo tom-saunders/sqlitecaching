@@ -4,14 +4,20 @@ from collections import namedtuple
 
 import parameterized
 
-from sqlitecaching.dict import CacheDictMapping, CacheDictMappingTuple
+from sqlitecaching.dict import (
+    CacheDictMapping,
+    CacheDictMappingException,
+    CacheDictMappingInvalidIdentifierException,
+    CacheDictMappingMissingKeysException,
+    CacheDictMappingReservedTableException,
+    CacheDictMappingTuple,
+)
 from sqlitecaching.test import CacheDictTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
-log.addHandler(logging.NullHandler())
 
 # if this isn't defined here then the listcomps inside the class fail
-Def = namedtuple("Def", ["name", "mapping", "statement_type", "expected"])
+Def = namedtuple("Def", ["name", "mapping", "expected", "meta"], defaults=[None])
 
 
 @test_level(TestLevel.PRE_COMMIT)
@@ -21,7 +27,7 @@ class TestCacheDictMapping(CacheDictTestBase):
         self.res_dir += "mappings/"
 
     In = CacheDictMappingTuple
-    InputDef = namedtuple("InputDef", ["filename", "mapping"])
+    InputDef = namedtuple("InputDef", ["result", "mapping"])
 
     statement_types = [
         "create_statement",
@@ -35,28 +41,28 @@ class TestCacheDictMapping(CacheDictTestBase):
         "values_statement",
     ]
 
-    mapping_definitions = [
+    success_mapping_definitions = [
         InputDef(
-            filename="aA__to__", mapping=In(table="aa", keys={"a": "A"}, values={},),
+            result="aA__to__", mapping=In(table="aa", keys={"a": "A"}, values={},),
         ),
         InputDef(
-            filename="aA__to__bB",
+            result="aA__to__bB",
             mapping=In(table="aa__bb", keys={"a": "A"}, values={"b": "B"},),
         ),
         InputDef(
-            filename="aA_bB__to__",
+            result="aA_bB__to__",
             mapping=In(table="aa_bb", keys={"a": "A", "b": "B"}, values={},),
         ),
         InputDef(
-            filename="aA_bB__to__",
+            result="aA_bB__to__",
             mapping=In(table="aA_bB", keys={"a": "a", "b": "b"}, values={},),
         ),
         InputDef(
-            filename="aA_bB__to__cC",
+            result="aA_bB__to__cC",
             mapping=In(table="aa_bb__cc", keys={"a": "a", "b": "b"}, values={"c": "C"}),
         ),
         InputDef(
-            filename="aA_bB__to__cC_dD",
+            result="aA_bB__to__cC_dD",
             mapping=In(
                 table="aa_bb__cc_dd",
                 keys={"a": "a", "b": "b"},
@@ -64,7 +70,7 @@ class TestCacheDictMapping(CacheDictTestBase):
             ),
         ),
         InputDef(
-            filename="aA_bB__to__cC_dD",
+            result="aA_bB__to__cC_dD",
             mapping=In(
                 table="aa_bb__cc_dd",
                 keys={"b": "B", "a": "A"},
@@ -73,21 +79,54 @@ class TestCacheDictMapping(CacheDictTestBase):
         ),
     ]
 
+    FailRes = namedtuple("FailRes", ["name", "exception"])
+    fail_mapping_definitions = [
+        InputDef(
+            result=FailRes(
+                name="missing_table_name",
+                exception=CacheDictMappingInvalidIdentifierException,
+            ),
+            mapping=In(table="", keys={"a": "A"}, values={"b": "B"},),
+        ),
+        InputDef(
+            result=FailRes(
+                name="reserved_table_name",
+                exception=CacheDictMappingReservedTableException,
+            ),
+            mapping=In(table="sqlite_a", keys={"a": "A"}, values={"b": "B"},),
+        ),
+        InputDef(
+            result=FailRes(
+                name="missing_keys", exception=CacheDictMappingMissingKeysException,
+            ),
+            mapping=In(table="__bB", keys={}, values={"b": "B"},),
+        ),
+    ]
+
     create_mapping_success_params = [
         Def(
             name="%s_%s"
             % (getattr(getattr(input_def, "mapping"), "table"), statement_type),
             mapping=getattr(input_def, "mapping"),
-            statement_type=statement_type,
-            expected="%s_%s.sql" % (statement_type, getattr(input_def, "filename")),
+            expected="%s_%s.sql" % (statement_type, getattr(input_def, "result")),
+            meta=statement_type,
         )
         for (input_def, statement_type) in itertools.product(
-            mapping_definitions, statement_types
+            success_mapping_definitions, statement_types
         )
     ]
 
+    create_mapping_fail_params = [
+        Def(
+            name=getattr(getattr(input_def, "result"), "name"),
+            mapping=getattr(input_def, "mapping"),
+            expected=getattr(getattr(input_def, "result"), "exception"),
+        )
+        for input_def in fail_mapping_definitions
+    ]
+
     @parameterized.parameterized.expand(create_mapping_success_params)
-    def test_create_mapping_success(self, name, mapping, statement_type, expected):
+    def test_create_mapping_success(self, name, mapping, expected, statement_type):
         log.debug("create CacheDictMapping")
         actual = CacheDictMapping(
             table=mapping.table, keys=mapping.keys, values=mapping.values
@@ -99,3 +138,18 @@ class TestCacheDictMapping(CacheDictTestBase):
             expected_statement = expected_statement_file.read()
         actual_statement = getattr(actual, statement_type)()
         self.assertEqual(expected_statement, actual_statement)
+
+    @parameterized.parameterized.expand(create_mapping_fail_params)
+    def test_create_mapping_fail(self, name, mapping, expected, meta):
+        log.debug("fail create CacheDictMapping")
+        # If we use expected here rather than CacheDictMappingException then
+        # the test _errors_ rather than fails. The asserts afterwards will
+        # fail based on the value of expected
+        with self.assertRaises(CacheDictMappingException) as raised_context:
+            CacheDictMapping(
+                table=mapping.table, keys=mapping.keys, values=mapping.values
+            )
+        actual = raised_context.exception
+        self.assertEqual(actual.type_id, expected._type_id)
+        self.assertEqual(actual.cause_id, expected._cause_id)
+        log.info(raised_context.exception._params)

@@ -5,7 +5,6 @@ from sqlitecaching.dict import CacheDict
 from sqlitecaching.test import CacheDictTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
-log.addHandler(logging.NullHandler())
 
 
 @test_level(TestLevel.PRE_COMMIT)

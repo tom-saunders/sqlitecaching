@@ -5,7 +5,6 @@ from sqlitecaching.config import Config as BaseConfig
 from sqlitecaching.test.enums import TestLevel
 
 log = logging.getLogger(__name__)
-log.addHandler(logging.NullHandler())
 
 
 class Config(BaseConfig):
@@ -33,7 +32,7 @@ class Config(BaseConfig):
         self._resource_dir = path
 
 
-config = Config()
+config = Config(logger=logging.getLogger(".".join(__name__.split(".")[:-1])))
 
 
 def test_level(level):

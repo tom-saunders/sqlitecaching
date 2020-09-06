@@ -1,3 +1,9 @@
+import logging
+
 from sqlitecaching.config import Config
 
-config = Config()
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+log.addHandler(logging.NullHandler())
+
+config = Config(logger=log)

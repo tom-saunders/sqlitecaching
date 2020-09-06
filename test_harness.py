@@ -33,7 +33,7 @@ def handle_arguments():
     argparser.add_argument(
         "-l",
         "--log-level",
-        default="notset",
+        default="warning",
         type=str,
         choices=[level.casefold() for level in LogLevel.values()],
     )
@@ -77,7 +77,7 @@ def handle_arguments():
 
     if not args.log_output_dir:
         args.log_output_dir = args.output_dir
-    testconfig.set_logger_level(LogLevel.DEBUG)
+    testconfig.set_logger_level(test_log_level)
     testconfig.set_log_output((f"{args.log_output_dir}/test.log", test_log_level))
     testconfig.set_debug_output(
         (f"{args.log_output_dir}/test.debug.log", LogLevel.DEBUG)
