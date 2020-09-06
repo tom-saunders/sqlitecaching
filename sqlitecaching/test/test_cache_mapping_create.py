@@ -1,3 +1,4 @@
+import itertools
 import logging
 from collections import namedtuple
 
@@ -9,6 +10,9 @@ from sqlitecaching.test import CacheDictTestBase, TestLevel, test_level
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
+# if this isn't defined here then the listcomps inside the class fail
+Def = namedtuple("Def", ["name", "mapping", "statement_type", "expected"])
+
 
 @test_level(TestLevel.PRE_COMMIT)
 class TestCacheDictMapping(CacheDictTestBase):
@@ -16,75 +20,82 @@ class TestCacheDictMapping(CacheDictTestBase):
         super().__init__(*args, **kwargs)
         self.res_dir += "mappings/"
 
-    Def = namedtuple("Def", ["name", "input", "expected"])
     In = CacheDictMappingTuple
-    Statements = namedtuple(
-        "Statements",
-        [
-            "create_statement",
-            "clear_statement",
-            "delete_statement",
-            "upsert_statement",
-            "remove_statement",
-            "length_statement",
-            "keys_statement",
-            "items_statement",
-            "values_statement",
-        ],
-        defaults=([True for _ in range(0, 9)]),
-    )
+    InputDef = namedtuple("InputDef", ["filename", "mapping"])
 
-    create_mapping_success_params = [
-        Def(
-            name="aA__to__",
-            input=In(table="aa", keys={"a": "A"}, values={},),
-            expected=Statements(),
+    statement_types = [
+        "create_statement",
+        "clear_statement",
+        "delete_statement",
+        "upsert_statement",
+        "remove_statement",
+        "length_statement",
+        "keys_statement",
+        "items_statement",
+        "values_statement",
+    ]
+
+    mapping_definitions = [
+        InputDef(
+            filename="aA__to__", mapping=In(table="aa", keys={"a": "A"}, values={},),
         ),
-        Def(
-            name="aA__to__bB",
-            input=In(table="aa__bb", keys={"a": "A"}, values={"b": "B"},),
-            expected=Statements(),
+        InputDef(
+            filename="aA__to__bB",
+            mapping=In(table="aa__bb", keys={"a": "A"}, values={"b": "B"},),
         ),
-        Def(
-            name="aA_bB__to__",
-            input=In(table="aa_bb", keys={"a": "A", "b": "B"}, values={},),
-            expected=Statements(),
+        InputDef(
+            filename="aA_bB__to__",
+            mapping=In(table="aa_bb", keys={"a": "A", "b": "B"}, values={},),
         ),
-        Def(
-            name="aA_bB__to__",
-            input=In(table="aA_bB", keys={"a": "a", "b": "b"}, values={},),
-            expected=Statements(),
+        InputDef(
+            filename="aA_bB__to__",
+            mapping=In(table="aA_bB", keys={"a": "a", "b": "b"}, values={},),
         ),
-        Def(
-            name="aA_bB__to__cC",
-            input=In(table="aa_bb__cc", keys={"a": "a", "b": "b"}, values={"c": "C"}),
-            expected=Statements(),
+        InputDef(
+            filename="aA_bB__to__cC",
+            mapping=In(table="aa_bb__cc", keys={"a": "a", "b": "b"}, values={"c": "C"}),
         ),
-        Def(
-            name="aA_bB__to__cC_dD",
-            input=In(
+        InputDef(
+            filename="aA_bB__to__cC_dD",
+            mapping=In(
                 table="aa_bb__cc_dd",
                 keys={"a": "a", "b": "b"},
                 values={"c": "C", "d": "D"},
             ),
-            expected=Statements(),
+        ),
+        InputDef(
+            filename="aA_bB__to__cC_dD",
+            mapping=In(
+                table="aa_bb__cc_dd",
+                keys={"b": "B", "a": "A"},
+                values={"d": "D", "c": "C"},
+            ),
         ),
     ]
 
+    create_mapping_success_params = [
+        Def(
+            name="%s_%s"
+            % (getattr(getattr(input_def, "mapping"), "table"), statement_type),
+            mapping=getattr(input_def, "mapping"),
+            statement_type=statement_type,
+            expected="%s_%s.sql" % (statement_type, getattr(input_def, "filename")),
+        )
+        for (input_def, statement_type) in itertools.product(
+            mapping_definitions, statement_types
+        )
+    ]
+
     @parameterized.parameterized.expand(create_mapping_success_params)
-    def test_create_mapping_success(self, name, input, expected):
+    def test_create_mapping_success(self, name, mapping, statement_type, expected):
         log.debug("create CacheDictMapping")
         actual = CacheDictMapping(
-            table=input.table, keys=input.keys, values=input.values
+            table=mapping.table, keys=mapping.keys, values=mapping.values
         )
         log.debug("created CacheDictMapping: %s", actual)
 
-        for statement_type in expected._fields:
-            with self.subTest(name=name, statement_type=statement_type):
-                expected_statement = getattr(expected, statement_type)
-                expected_statement_name = f"{statement_type}_{name}.sql"
-                expected_statement_path = self.res_dir + expected_statement_name
-                with open(expected_statement_path, "r") as expected_statement_file:
-                    expected_statement = expected_statement_file.read()
-                actual_statement = getattr(actual, statement_type)()
-                self.assertEqual(expected_statement, actual_statement)
+        expected_statement_path = self.res_dir + expected
+        with open(expected_statement_path, "r") as expected_statement_file:
+            expected_statement = expected_statement_file.read()
+        actual_statement = getattr(actual, statement_type)()
+        self.assertEqual(expected_statement, actual_statement)
