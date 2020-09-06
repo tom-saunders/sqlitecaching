@@ -8,6 +8,7 @@ from sqlitecaching.dict import (
     CacheDictMapping,
     CacheDictMappingException,
     CacheDictMappingInvalidIdentifierException,
+    CacheDictMappingKeyValOverlapException,
     CacheDictMappingMissingKeysException,
     CacheDictMappingReservedTableException,
     CacheDictMappingTuple,
@@ -100,6 +101,15 @@ class TestCacheDictMapping(CacheDictTestBase):
                 name="missing_keys", exception=CacheDictMappingMissingKeysException,
             ),
             mapping=In(table="__bB", keys={}, values={"b": "B"},),
+        ),
+        InputDef(
+            result=FailRes(
+                name="overlapping_key_ands_values",
+                exception=CacheDictMappingKeyValOverlapException,
+            ),
+            mapping=In(
+                table="aA__aA_bB", keys={"a": "A"}, values={"a": "A", "b": "B"},
+            ),
         ),
     ]
 
