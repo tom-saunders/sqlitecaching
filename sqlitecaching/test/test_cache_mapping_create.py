@@ -6,10 +6,12 @@ import parameterized
 
 from sqlitecaching.dict import (
     CacheDictMapping,
+    CacheDictMappingDuplicateKeyNameException,
     CacheDictMappingException,
     CacheDictMappingInvalidIdentifierException,
     CacheDictMappingKeyValOverlapException,
     CacheDictMappingMissingKeysException,
+    CacheDictMappingNoIdentifierProvidedException,
     CacheDictMappingReservedTableException,
     CacheDictMappingTuple,
 )
@@ -84,10 +86,24 @@ class TestCacheDictMapping(CacheDictTestBase):
     fail_mapping_definitions = [
         InputDef(
             result=FailRes(
-                name="missing_table_name",
-                exception=CacheDictMappingInvalidIdentifierException,
+                name="blank_table_name",
+                exception=CacheDictMappingNoIdentifierProvidedException,
             ),
             mapping=In(table="", keys={"a": "A"}, values={"b": "B"},),
+        ),
+        InputDef(
+            result=FailRes(
+                name="none_table_name",
+                exception=CacheDictMappingNoIdentifierProvidedException,
+            ),
+            mapping=In(table=None, keys={"a": "A"}, values={"b": "B"},),
+        ),
+        InputDef(
+            result=FailRes(
+                name="invalid_table_name",
+                exception=CacheDictMappingInvalidIdentifierException,
+            ),
+            mapping=In(table=" ", keys={"a": "A"}, values={"b": "B"},),
         ),
         InputDef(
             result=FailRes(
@@ -109,6 +125,36 @@ class TestCacheDictMapping(CacheDictTestBase):
             ),
             mapping=In(
                 table="aA__aA_bB", keys={"a": "A"}, values={"a": "A", "b": "B"},
+            ),
+        ),
+        InputDef(
+            result=FailRes(
+                name="blank_key_name",
+                exception=CacheDictMappingNoIdentifierProvidedException,
+            ),
+            mapping=In(table="A_bB", keys={"": "A"}, values={"b": "B"},),
+        ),
+        InputDef(
+            result=FailRes(
+                name="none_key_name",
+                exception=CacheDictMappingNoIdentifierProvidedException,
+            ),
+            mapping=In(table="A_bB", keys={None: "A"}, values={"b": "B"},),
+        ),
+        InputDef(
+            result=FailRes(
+                name="blank_key_name",
+                exception=CacheDictMappingInvalidIdentifierException,
+            ),
+            mapping=In(table="A_bB", keys={" ": "A"}, values={"b": "B"},),
+        ),
+        InputDef(
+            result=FailRes(
+                name="duplicated_key_name",
+                exception=CacheDictMappingDuplicateKeyNameException,
+            ),
+            mapping=In(
+                table="aA_AA__bB", keys={"a": "A", "A": "A"}, values={"b": "B"},
             ),
         ),
     ]
