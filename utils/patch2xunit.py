@@ -9,7 +9,6 @@ import xml.etree.ElementTree as ET
 from sqlitecaching.config import UTCFormatter
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
 
 
 def handle_arguments():
@@ -42,9 +41,8 @@ def handle_arguments():
     if args.log_level >= 2:
         log_level = logging.DEBUG
 
+    log.setLevel(log_level)
     root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-
     root_log_path = args.log_file
     root_handler = logging.FileHandler(root_log_path)
     root_handler.setLevel(log_level)

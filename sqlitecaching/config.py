@@ -4,7 +4,6 @@ import time
 from sqlitecaching.enums import LogLevel
 
 log = logging.getLogger(__name__)
-log.addHandler(logging.NullHandler())
 
 
 class UTCFormatter(logging.Formatter):
@@ -23,8 +22,16 @@ class UTCFormatter(logging.Formatter):
 
 class Config:
     def __init__(
-        self, *, logger_level=LogLevel.WARNING, log_output=None, debug_output=None,
+        self,
+        *,
+        logger=None,
+        logger_level=LogLevel.WARNING,
+        log_output=None,
+        debug_output=None,
     ):
+        if not logger:
+            logger = log
+        self.logger = logger
         self.logger_level = logger_level
         self.log_output = log_output
         self.debug_output = debug_output
@@ -35,17 +42,17 @@ class Config:
         self._setup_logging()
 
     def _setup_logging(self):
-        log.info("(re)setting up logger: %s", log.name)
-        log.info("setting logger %s level to %s", log.name, self.logger_level)
-        log.setLevel(self.logger_level.value[1])
+        log.info("(re)setting up logger: %s", self.logger.name)
+        log.info("setting logger %s level to %s", self.logger.name, self.logger_level)
 
         if self._log_handlers:
             log.debug(
-                "clean up previously configured handlers for logger %s", log.name,
+                "clean up previously configured handlers for logger %s",
+                self.logger.name,
             )
             for handler in self._log_handlers:
                 log.debug("remove handler: %s", handler)
-                log.removeHandler(handler)
+                self.logger.removeHandler(handler)
 
         self._log_handlers = []
 
@@ -61,7 +68,7 @@ class Config:
                         "additional output"
                     ),
                     log_level,
-                    log.name,
+                    self.logger.name,
                     self.logger_level,
                 )
 
@@ -71,7 +78,7 @@ class Config:
             log_formatter = UTCFormatter()
             log_handler.setFormatter(log_formatter)
 
-            log.addHandler(log_handler)
+            self.logger.addHandler(log_handler)
             self._log_handlers.append(log_handler)
 
             log.debug("configured log_handler: %s", log_handler)
@@ -88,7 +95,7 @@ class Config:
                         "additional output"
                     ),
                     debug_level,
-                    log.name,
+                    self.logger.name,
                     self.logger_level,
                 )
 
@@ -102,20 +109,20 @@ class Config:
             debug_formatter = UTCFormatter(fmt=debug_format)
             debug_handler.setFormatter(debug_formatter)
 
-            log.addHandler(debug_handler)
+            self.logger.addHandler(debug_handler)
             self._log_handlers.append(debug_handler)
 
             log.debug(
                 "configured debug file_handler: %s", debug_handler,
             )
 
-        log.debug("(re)set up logger: %s", log.name)
+        log.debug("(re)set up logger: %s", self.logger.name)
 
     def get_sub_logger(self, sub_ident):
-        if sub_ident.startswith(f"{log.name}."):
+        if sub_ident.startswith(f"{self.logger.name}."):
             ident = sub_ident
         else:
-            ident = f"{log.name}.{sub_ident}"
+            ident = f"{self.logger.name}.{sub_ident}"
 
         sub_logger = logging.getLogger(ident)
         sub_logger.info("got sub_logger: %s", ident)

@@ -4,8 +4,39 @@ import re
 import sqlite3
 from collections import UserDict, namedtuple
 
+from sqlitecaching.exceptions import SqliteCachingException
+
 log = logging.getLogger(__name__)
-log.addHandler(logging.NullHandler())
+
+CacheDictException = SqliteCachingException.register_type(
+    type_name=f"{__name__}.CacheDictException", type_id=1
+)
+__CDE = CacheDictException
+
+
+CacheDictMappingException = SqliteCachingException.register_type(
+    type_name=f"{__name__}.CacheDictMappingException", type_id=2
+)
+__CDME = CacheDictMappingException
+
+CacheDictMappingMissingKeysException = __CDME.register_cause(
+    cause_name=f"{__name__}.MappingMissingKeys", cause_id=0, fmt="", req_params=None
+)
+CacheDictMappingReservedTableException = __CDME.register_cause(
+    cause_name=f"{__name__}.ReservedTableException",
+    cause_id=1,
+    fmt="table cannot start with sqlite_ : [{table_name}]",
+    req_params=["table_name"],
+)
+CacheDictMappingInvalidIdentifierException = __CDME.register_cause(
+    cause_name=f"{__name__}.InvalidIdentifierException",
+    cause_id=2,
+    fmt=(
+        "sqlitecaching identifier provided: [{identifier}] does not match "
+        "requirements [{re}]"
+    ),
+    req_params=["identifier", "re"],
+)
 
 
 class CacheDict(UserDict):
@@ -43,7 +74,6 @@ class CacheDict(UserDict):
         if log_name:
             log.warn("using caller provided logger: [%s]", log_name)
             self.log = logging.getLogger(log_name)
-            self.log.addHandler(logging.NullLogger())
             self.log.info("using caller provided logger: [%s]", log_name)
         else:
             self.log = log
@@ -160,15 +190,15 @@ CacheDictMappingTuple = namedtuple("CacheDictMappingTuple", ["table", "keys", "v
 class CacheDictMapping:
     def __init__(self, *, table, keys, values):
         if not keys:
-            fmt = "sqlitecaching keys must not be empty"
-            log.error(fmt)
-            raise CacheDictException(fmt)
+            raise CacheDictMappingMissingKeysException()
 
         validated_table = self._validate_identifier(identifier=table)
         if validated_table.startswith("sqlite_"):
             fmt = "table cannot start with sqlite_ : [%s]"
             log.error(fmt, validated_table)
-            raise CacheDictException(fmt % validated_table)
+            raise CacheDictMappingReservedTableException(
+                params={"table_name": validated_table}
+            )
 
         key_columns = collections.OrderedDict()
         value_columns = collections.OrderedDict()
@@ -648,7 +678,9 @@ class CacheDictMapping:
             log.error(
                 fmt, identifier, cls._IDENTIFIER_RE_DEFN,
             )
-            raise CacheDictException(fmt % (identifier, cls._IDENTIFIER_RE_DEFN))
+            raise CacheDictMappingInvalidIdentifierException(
+                params={"identifier": identifier, "re": cls._IDENTIFIER_RE_DEFN}
+            )
         lower_identifier = identifier.lower()
         if identifier != lower_identifier:
             log.warning(
@@ -705,7 +737,3 @@ class CacheDictMapping:
                 upper_sqltype,
             )
         return upper_sqltype
-
-
-class CacheDictException(Exception):
-    pass
