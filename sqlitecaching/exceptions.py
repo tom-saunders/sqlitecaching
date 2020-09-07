@@ -22,7 +22,12 @@ class SqliteCachingException(Exception):
     _types = {}
 
     def __init__(
-        self, *, type_id: int, cause_id: int, params: typing.Dict, stacklevel: int
+        self,
+        *,
+        type_id: int,
+        cause_id: int,
+        params: typing.Dict,
+        stacklevel: int,
     ):
         self.type_id = type_id
         self.cause_id = cause_id
@@ -33,7 +38,10 @@ class SqliteCachingException(Exception):
         self._type = self._types.get(type_id, None)
         if not self._type:
             raise SqliteCachingException(
-                type_id=0, cause_id=0, params={"type_id": type_id}, stacklevel=1
+                type_id=0,
+                cause_id=0,
+                params={"type_id": type_id},
+                stacklevel=1,
             )
         self._cause = self._type.exception._causes.get(cause_id, None)
         if not self._cause:
@@ -148,7 +156,10 @@ class SqliteCachingException(Exception):
                     _cause_id = cause_id
 
                     def __init__(
-                        self, *, params: typing.Dict = None, stacklevel: int = 2
+                        self,
+                        *,
+                        params: typing.Dict = None,
+                        stacklevel: int = 2,
                     ):
                         super().__init__(
                             cause_id=self._cause_id,
@@ -157,7 +168,10 @@ class SqliteCachingException(Exception):
                         )
 
                 cause = Cause(
-                    name=cause_name, fmt=fmt, params=Params, exception=CauseException
+                    name=cause_name,
+                    fmt=fmt,
+                    params=Params,
+                    exception=CauseException,
                 )
                 cls._causes[cause_id] = cause
 
@@ -174,7 +188,8 @@ class SqliteCachingException(Exception):
 
 
 SqliteCachingMetaException = SqliteCachingException.register_type(
-    type_name=f"{__name__}.SqliteCachingMetaException", type_id=0
+    type_name=f"{__name__}.SqliteCachingMetaException",
+    type_id=0,
 )
 SqliteCachingMissingTypeException = SqliteCachingMetaException.register_cause(
     cause_name=f"{__name__}.SqliteCachingMissingTypeException",

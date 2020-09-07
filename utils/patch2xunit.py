@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 def handle_arguments():
     argparser = argparse.ArgumentParser(
-        description="Utility to convert patch files into a rough xunit format."
+        description="Utility to convert patch files into a rough xunit format.",
     )
     argparser.add_argument(
         "-l",
@@ -23,13 +23,25 @@ def handle_arguments():
         required=False,
     )
     argparser.add_argument(
-        "-L", "--log-level", action="count", default=0, required=False
+        "-L",
+        "--log-level",
+        action="count",
+        default=0,
+        required=False,
     )
     argparser.add_argument(
-        "-o", "--output", default=None, type=str, required=False,
+        "-o",
+        "--output",
+        default=None,
+        type=str,
+        required=False,
     )
     argparser.add_argument(
-        "-i", "--input", default=None, type=str, required=False,
+        "-i",
+        "--input",
+        default=None,
+        type=str,
+        required=False,
     )
 
     args = argparser.parse_args()
@@ -169,7 +181,7 @@ def process_hunks(*, in_file):
             before_count=int(match.group(2)),
             after_count=int(match.group(4)),
         )
-        hunks.append(hunk,)
+        hunks.append(hunk)
         line = in_file.readline()
         match = __FILE_HUNK_FIRST_LINE_PATTERN.match(line)
 
@@ -216,7 +228,8 @@ def write_output(*, output_path, content):
         path_failures = 0
         for hunk in hunks:
             tree_builder.start(
-                "testcase", {"name": f"{path}.path_failures", "classname": path},
+                "testcase",
+                {"name": f"{path}.path_failures", "classname": path},
             )
             fail_el = tree_builder.start("failure", {})
             fail_el.text = hunk

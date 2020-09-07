@@ -12,7 +12,8 @@ CacheDictMappingTuple = namedtuple("CacheDictMappingTuple", ["table", "keys", "v
 
 
 CacheDictMappingException = SqliteCachingException.register_type(
-    type_name=f"{__name__}.CacheDictMappingException", type_id=2
+    type_name=f"{__name__}.CacheDictMappingException",
+    type_id=2,
 )
 __CDME = CacheDictMappingException
 
@@ -74,7 +75,7 @@ class CacheDictMapping:
         validated_table = self._validate_identifier(identifier=table)
         if validated_table.startswith("sqlite_"):
             raise CacheDictMappingReservedTableException(
-                params={"table_name": validated_table}
+                params={"table_name": validated_table},
             )
 
         key_columns = collections.OrderedDict()
@@ -87,7 +88,7 @@ class CacheDictMapping:
             in_keys = key_columns.get(validated_name, unset_value)
             if in_keys is not unset_value:
                 raise CacheDictMappingDuplicateKeyNameException(
-                    params={"identifier": name, "validated_identifier": validated_name}
+                    params={"identifier": name, "validated_identifier": validated_name},
                 )
             else:
                 self._handle_column(
@@ -118,7 +119,9 @@ class CacheDictMapping:
         self.key_info = self.Keys(**key_columns)
         self.value_info = self.Values(**value_columns)
         self.mapping_tuple = CacheDictMappingTuple(
-            table=validated_table, keys=self.key_info, values=self.value_info
+            table=validated_table,
+            keys=self.key_info,
+            values=self.value_info,
         )
 
         self._create_statement = None
@@ -167,7 +170,7 @@ class CacheDictMapping:
             [
                 f"'{column}' {getattr(keys, column)}"
                 for column in key_columns
-            ]
+            ],
         )
         key_column_definitions += ", -- primary key"
 
@@ -176,7 +179,7 @@ class CacheDictMapping:
                 [
                     f"'{column}' {getattr(values, column)}"
                     for column in value_columns
-                ]
+                ],
             )
             value_column_definitions += ", -- value"
         else:
@@ -187,7 +190,7 @@ class CacheDictMapping:
         primary_key_columns += "',\n        '".join(key_columns)
         primary_key_columns += "'"
         primary_key_definition = self._PRIMARY_KEY_FMT.format(
-            primary_key_columns=primary_key_columns
+            primary_key_columns=primary_key_columns,
         )
 
         unstripped_create_statement = self._CREATE_FMT.format(
@@ -219,7 +222,7 @@ class CacheDictMapping:
         table_identifier = f"'{self.mapping_tuple.table}'"
 
         unstripped_clear_statement = self._CLEAR_FMT.format(
-            table_identifier=table_identifier
+            table_identifier=table_identifier,
         )
 
         clear_lines = []
@@ -244,7 +247,7 @@ class CacheDictMapping:
         table_identifier = f"'{self.mapping_tuple.table}'"
 
         unstripped_delete_statement = self._DELETE_FMT.format(
-            table_identifier=table_identifier
+            table_identifier=table_identifier,
         )
 
         delete_lines = []
@@ -308,7 +311,7 @@ class CacheDictMapping:
             all_columns += value_columns
 
             value_values = ", -- value\n    ".join(
-                [f"excluded.'{c}'" for c in value_column_names]
+                [f"excluded.'{c}'" for c in value_column_names],
             )
             value_values += " -- value"
 
@@ -324,7 +327,7 @@ class CacheDictMapping:
             upsert_stmt += "-- no conflict action as no values defined"
 
         all_values = ",\n    ".join(
-            ["?" for _ in range(0, len(key_column_names) + len(value_column_names))]
+            ["?" for _ in range(0, len(key_column_names) + len(value_column_names))],
         )
         unstripped_upsert_statement = self._UPSERT_FMT.format(
             table_identifier=table_identifier,
@@ -430,7 +433,8 @@ class CacheDictMapping:
         key_columns += "' -- key"
 
         unstripped_keys_statement = self._KEYS_FMT.format(
-            key_columns=key_columns, table_identifier=table_identifier,
+            key_columns=key_columns,
+            table_identifier=table_identifier,
         )
 
         keys_lines = []
@@ -472,7 +476,8 @@ class CacheDictMapping:
             all_columns += "' -- key"
 
         unstripped_items_statement = self._ITEMS_FMT.format(
-            all_columns=all_columns, table_identifier=table_identifier,
+            all_columns=all_columns,
+            table_identifier=table_identifier,
         )
 
         items_lines = []
@@ -508,7 +513,8 @@ class CacheDictMapping:
             value_columns = "null -- null value to permit querying"
 
         unstripped_values_statement = self._VALUES_FMT.format(
-            value_columns=value_columns, table_identifier=table_identifier,
+            value_columns=value_columns,
+            table_identifier=table_identifier,
         )
 
         values_lines = []
@@ -534,14 +540,15 @@ class CacheDictMapping:
     # fmt: on
 
     _IDENTIFIER_PATTERN = re.compile(
-        _IDENTIFIER_RE_DEFN, flags=(re.ASCII | re.IGNORECASE | re.VERBOSE),
+        _IDENTIFIER_RE_DEFN,
+        flags=(re.ASCII | re.IGNORECASE | re.VERBOSE),
     )
 
     @classmethod
     def _validate_identifier(cls, *, identifier):
         if not identifier:
             raise CacheDictMappingNoIdentifierProvidedException(
-                params={"identifier": identifier}
+                params={"identifier": identifier},
             )
 
         if identifier != identifier.strip():
@@ -560,10 +567,12 @@ class CacheDictMapping:
                 "requirements [%s]"
             )
             log.error(
-                fmt, identifier, cls._IDENTIFIER_RE_DEFN,
+                fmt,
+                identifier,
+                cls._IDENTIFIER_RE_DEFN,
             )
             raise CacheDictMappingInvalidIdentifierException(
-                params={"identifier": identifier, "re": cls._IDENTIFIER_RE_DEFN}
+                params={"identifier": identifier, "re": cls._IDENTIFIER_RE_DEFN},
             )
         lower_identifier = identifier.lower()
         if identifier != lower_identifier:
@@ -594,7 +603,7 @@ class CacheDictMapping:
         match = cls._IDENTIFIER_PATTERN.match(sqltype)
         if not match:
             raise CacheDictMappingInvalidSQLTypeException(
-                params={"sqltype": sqltype, "re": cls._IDENTIFIER_RE_DEFN}
+                params={"sqltype": sqltype, "re": cls._IDENTIFIER_RE_DEFN},
             )
         upper_sqltype = sqltype.upper()
         if sqltype != upper_sqltype:

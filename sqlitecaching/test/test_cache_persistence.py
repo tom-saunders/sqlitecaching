@@ -28,7 +28,8 @@ class TestCacheDictPersistence(CacheDictTestBase):
         return test_config
 
     TestDef = namedtuple(
-        "TestDef", ["name", "provider", "provider_params", "inputs", "outputs"]
+        "TestDef",
+        ["name", "provider", "provider_params", "inputs", "outputs"],
     )
 
     @parameterized.parameterized.expand(
@@ -54,10 +55,15 @@ class TestCacheDictPersistence(CacheDictTestBase):
                 inputs=[("a", "a"), ("b", "b")],
                 outputs={"a": "a", "b": "b"},
             ),
-        ]
+        ],
     )
     def test_retrieve_stored_value(
-        self, name, provider, provider_params, inputs, expected_outputs
+        self,
+        name,
+        provider,
+        provider_params,
+        inputs,
+        expected_outputs,
     ):
         missing_value = object()
         cache_dict = provider(**provider_params)
@@ -68,7 +74,7 @@ class TestCacheDictPersistence(CacheDictTestBase):
 
         log.debug(
             "check all actual keys in cache_dist are expected and "
-            "are associated with the value expected"
+            "are associated with the value expected",
         )
         for (actual_key, actual_value) in cache_dict.items():
             expected_value = expected_outputs.get(actual_key, missing_value)
