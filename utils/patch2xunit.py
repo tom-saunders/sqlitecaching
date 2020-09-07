@@ -4,7 +4,7 @@ import argparse
 import logging
 import re
 import sys
-import xml.etree.ElementTree as ET
+from xml.etree import ElementTree
 
 from sqlitecaching.config import UTCFormatter
 
@@ -208,7 +208,7 @@ def process_input(*, input_path):
 
 
 def write_output(*, output_path, content):
-    tree_builder = ET.TreeBuilder()
+    tree_builder = ElementTree.TreeBuilder()
     root = tree_builder.start("testsuites", {})
     root_failures = 0
     for (path, hunks) in content.items():
@@ -230,7 +230,7 @@ def write_output(*, output_path, content):
     root.set("tests", str(root_failures))
     root.set("failures", str(root_failures))
     tree_builder.end("testsuites")
-    xml_tree = ET.ElementTree(tree_builder.close())
+    xml_tree = ElementTree.ElementTree(tree_builder.close())
 
     if output_path:
         with open(output_path, "w+") as out:
