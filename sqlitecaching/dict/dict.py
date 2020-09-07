@@ -7,7 +7,8 @@ from sqlitecaching.exceptions import SqliteCachingException
 log = logging.getLogger(__name__)
 
 CacheDictException = SqliteCachingException.register_type(
-    type_name=f"{__name__}.CacheDictException", type_id=1
+    type_name=f"{__name__}.CacheDictException",
+    type_id=1,
 )
 __CDE = CacheDictException
 
@@ -126,7 +127,13 @@ class CacheDict(UserDict):
 
     @classmethod
     def open_readwrite(
-        cls, *, path, mapping=None, create=False, sqlite_params=None, log_name=None
+        cls,
+        *,
+        path,
+        mapping=None,
+        create=False,
+        sqlite_params=None,
+        log_name=None,
     ):
         log.info("open readwrite create: [%s]", create)
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params=sqlite_params)
@@ -147,7 +154,7 @@ class CacheDict(UserDict):
     def _create_from_conn(cls, *, conn, mapping=None, log_name=None):
         log.warn(
             "creating CacheDict from existing connection may lead to "
-            "unexpected behaviour"
+            "unexpected behaviour",
         )
         return CacheDict(
             conn=conn,

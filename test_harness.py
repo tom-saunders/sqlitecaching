@@ -16,9 +16,15 @@ from sqlitecaching.test import config as testconfig
 
 def handle_arguments():
     argparser = argparse.ArgumentParser(
-        description="Harness to run testing covering sqlitecaching functionality."
+        description="Harness to run testing covering sqlitecaching functionality.",
     )
-    argparser.add_argument("-v", "--verbose", action="count", default=1, required=False)
+    argparser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=1,
+        required=False,
+    )
     argparser.add_argument(
         "-o",
         "--output-dir",
@@ -27,7 +33,8 @@ def handle_arguments():
         required=False,
     )
     argparser.add_argument(
-        "--text", action="store_true",
+        "--text",
+        action="store_true",
     )
 
     argparser.add_argument(
@@ -52,7 +59,11 @@ def handle_arguments():
         choices=[level.casefold() for level in LogLevel.values()],
     )
     argparser.add_argument(
-        "-O", "--log-output-dir", default=None, type=str, required=False,
+        "-O",
+        "--log-output-dir",
+        default=None,
+        type=str,
+        required=False,
     )
 
     args = argparser.parse_args()
@@ -80,7 +91,7 @@ def handle_arguments():
     testconfig.set_logger_level(test_log_level)
     testconfig.set_log_output((f"{args.log_output_dir}/test.log", test_log_level))
     testconfig.set_debug_output(
-        (f"{args.log_output_dir}/test.debug.log", LogLevel.DEBUG)
+        (f"{args.log_output_dir}/test.debug.log", LogLevel.DEBUG),
     )
 
     if args.text:

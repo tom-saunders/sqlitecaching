@@ -113,7 +113,8 @@ class Config:
             self._log_handlers.append(debug_handler)
 
             log.debug(
-                "configured debug file_handler: %s", debug_handler,
+                "configured debug file_handler: %s",
+                debug_handler,
             )
 
         log.debug("(re)set up logger: %s", self.logger.name)

@@ -9,7 +9,11 @@ log = logging.getLogger(__name__)
 
 class Config(BaseConfig):
     def __init__(
-        self, *args, test_level=TestLevel.PRE_COMMIT, output_dir=None, **kwargs,
+        self,
+        *args,
+        test_level=TestLevel.PRE_COMMIT,
+        output_dir=None,
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self._test_level = test_level
