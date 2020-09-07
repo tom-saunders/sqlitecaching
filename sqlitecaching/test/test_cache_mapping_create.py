@@ -4,7 +4,7 @@ from collections import namedtuple
 
 import parameterized
 
-from sqlitecaching.dict import (
+from sqlitecaching.dict.mapping import (
     CacheDictMapping,
     CacheDictMappingDuplicateKeyNameException,
     CacheDictMappingException,
