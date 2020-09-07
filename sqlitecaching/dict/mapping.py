@@ -17,7 +17,10 @@ CacheDictMappingException = SqliteCachingException.register_type(
 __CDME = CacheDictMappingException
 
 CacheDictMappingMissingKeysException = __CDME.register_cause(
-    cause_name=f"{__name__}.MappingMissingKeys", cause_id=0, fmt="", req_params=None
+    cause_name=f"{__name__}.MappingMissingKeys",
+    cause_id=0,
+    fmt="Mapping must have keys, provided: [{no_keys}]",
+    req_params=["no_keys"],
 )
 CacheDictMappingReservedTableException = __CDME.register_cause(
     cause_name=f"{__name__}.ReservedTableException",
@@ -28,10 +31,7 @@ CacheDictMappingReservedTableException = __CDME.register_cause(
 CacheDictMappingInvalidIdentifierException = __CDME.register_cause(
     cause_name=f"{__name__}.InvalidIdentifierException",
     cause_id=2,
-    fmt=(
-        "sqlitecaching identifier provided: [{identifier}] does not match "
-        "requirements [{re}]"
-    ),
+    fmt="identifier provided: [{identifier}] does not match requirements [{re}]",
     req_params=["identifier", "re"],
 )
 CacheDictMappingKeyValOverlapException = __CDME.register_cause(
@@ -58,12 +58,18 @@ CacheDictMappingDuplicateKeyNameException = __CDME.register_cause(
     ),
     req_params=["identifier", "validated_identifier"],
 )
+CacheDictMappingInvalidSQLTypeException = __CDME.register_cause(
+    cause_name=f"{__name__}.InvalidSQLTypeException",
+    cause_id=6,
+    fmt="sqltype provided: [%s] does not match requirements [%s]",
+    req_params=["sqltype", "re"],
+)
 
 
 class CacheDictMapping:
     def __init__(self, *, table, keys, values):
         if not keys:
-            raise CacheDictMappingMissingKeysException()
+            raise CacheDictMappingMissingKeysException(params={"no_keys": keys})
 
         validated_table = self._validate_identifier(identifier=table)
         if validated_table.startswith("sqlite_"):
@@ -587,14 +593,9 @@ class CacheDictMapping:
             return ""
         match = cls._IDENTIFIER_PATTERN.match(sqltype)
         if not match:
-            fmt = (
-                "sqlitecaching sqltype provided: [%s] does not match "
-                "requirements [%s]"
+            raise CacheDictMappingInvalidSQLTypeException(
+                params={"sqltype": sqltype, "re": cls._IDENTIFIER_RE_DEFN}
             )
-            log.error(
-                fmt, sqltype, cls._IDENTIFIER_RE_DEFN,
-            )
-            raise Exception(fmt % (sqltype, cls._IDENTIFIER_RE_DEFN))
         upper_sqltype = sqltype.upper()
         if sqltype != upper_sqltype:
             log.warning(
