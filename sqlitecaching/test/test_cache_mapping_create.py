@@ -161,10 +161,13 @@ class TestCacheDictMapping(CacheDictTestBase):
 
     create_mapping_success_params = [
         Def(
-            name="%s_%s"
-            % (getattr(getattr(input_def, "mapping"), "table"), statement_type),
-            mapping=getattr(input_def, "mapping"),
-            expected="%s_%s.sql" % (statement_type, getattr(input_def, "result")),
+            name="{table}_{statement_type}".format(
+                table=input_def.mapping.table, statement_type=statement_type
+            ),
+            mapping=input_def.mapping,
+            expected="{statement_type}_{result_name}.sql".format(
+                statement_type=statement_type, result_name=input_def.result
+            ),
             meta=statement_type,
         )
         for (input_def, statement_type) in itertools.product(

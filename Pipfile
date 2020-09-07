@@ -11,6 +11,7 @@ pre-commit = "~=2.7"
 black = "==19.10b0"
 isort = "~=5.5"
 parameterized = "~=0.7"
+flake8-printf-formatting = "~=1.1"
 
 [packages]
 ordered-enum = "~=0.0"
