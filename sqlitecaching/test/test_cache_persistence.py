@@ -90,7 +90,7 @@ class TestCacheDictPersistence(CacheDictTestBase):
             )
 
         log.debug("check all expected keys are in cache_dist")
-        for (expected_key, expected_value) in expected_outputs.items():
+        for expected_key in expected_outputs:
             actual_value = cache_dict.get(expected_key, missing_value)
             self.assertNotEqual(
                 actual_value,

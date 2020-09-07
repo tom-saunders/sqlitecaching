@@ -255,9 +255,9 @@ class TestCacheDictMapping(CacheDictTestBase):
 
     create_mapping_fail_params = [
         Def(
-            name=getattr(getattr(input_def, "result"), "name"),
-            mapping=getattr(input_def, "mapping"),
-            expected=getattr(getattr(input_def, "result"), "exception"),
+            name=input_def.result.name,
+            mapping=input_def.mapping,
+            expected=input_def.result.exception,
         )
         for input_def in fail_mapping_definitions
     ]
