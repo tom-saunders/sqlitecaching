@@ -4,7 +4,8 @@ import argparse
 import logging
 import re
 import sys
-from xml.etree import ElementTree
+
+from defusedxml import ElementTree
 
 from sqlitecaching.config import UTCFormatter
 

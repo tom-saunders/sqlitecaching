@@ -89,8 +89,10 @@ class TestCacheDictPersistence(CacheDictTestBase):
                 f"retrieved value does not match expected for key: {actual_key}",
             )
 
+        # FIXME why
         log.debug("check all expected keys are in cache_dist")
         for expected_key in expected_outputs:
+            # TODO ???
             actual_value = cache_dict.get(expected_key, missing_value)
             self.assertNotEqual(
                 actual_value,

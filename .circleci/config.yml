@@ -73,9 +73,10 @@ jobs:
                         name: create output directories
                         command: |
                             mkdir -p ~/circleci-sqlitecache/test-results
-                            mkdir -p ~/circleci-sqlitecache/test-results/unittest
-                            mkdir -p ~/circleci-sqlitecache/test-results/flake8
                             mkdir -p ~/circleci-sqlitecache/test-results/black
+                            mkdir -p ~/circleci-sqlitecache/test-results/fixme
+                            mkdir -p ~/circleci-sqlitecache/test-results/flake8
+                            mkdir -p ~/circleci-sqlitecache/test-results/unittest
                     - persist_to_workspace:
                         root: ~/
                         paths:
@@ -139,6 +140,36 @@ jobs:
                         root: ~/
                         paths:
                             - circleci-sqlitecache/.venv/
+
+    run_flake8-fixme:
+        working_directory: ~/circleci-sqlitecache
+        docker:
+            - image: circleci/python:3.8.5
+        environment:
+            PIPENV_VENV_IN_PROJECT: true
+            GIT_LFS_SKIP_SMUDGE: 1
+        steps:
+            - common_setup:
+                after_setup:
+                    - run:
+                        name: run flake8 only collecting FIXME / TODO comments and record
+                        command: |
+                            pipenv run flake8 \
+                                --select T101,T102 \
+                                --tee \
+                                --output ~/circleci-sqlitecache/test-results/fixme/flake8-fixme.txt \
+                            || true
+                            pipenv run flake8_junit \
+                                ~/circleci-sqlitecache/test-results/fixme/flake8-fixme.txt \
+                                ~/circleci-sqlitecache/test-results/fixme/fixme.xml \
+                            || true
+                        when: always
+                    - persist_to_workspace:
+                        root: ~/
+                        paths:
+                            - circleci-sqlitecache/test-results/fixme/
+            - store_test_artifacts:
+                test_name: "fixme"
 
     run_flake8:
         working_directory: ~/circleci-sqlitecache
@@ -237,6 +268,10 @@ workflows:
                 requires:
                     - get_code
             - run_flake8:
+                requires:
+                    - get_code
+                    - get_venv
+            - run_flake8-fixme:
                 requires:
                     - get_code
                     - get_venv
