@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "23a90cc072ecbc9164d8328b7a8a49db444fac2a2e053eec59b1c8e6a46a3e64"
+            "sha256": "357303a0b653e6989193c68391631b3db9904340b6ccf0bf784b610ca3c673e4"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -16,6 +16,14 @@
         ]
     },
     "default": {
+        "defusedxml": {
+            "hashes": [
+                "sha256:6687150770438374ab581bb7a1b327a847dd9c5749e396102de3fad4e8a3ef93",
+                "sha256:f684034d135af4c6cbb949b8a4d2ed61634515257a67299e5f940fbaa34377f5"
+            ],
+            "index": "pypi",
+            "version": "==0.6.0"
+        },
         "ordered-enum": {
             "hashes": [
                 "sha256:6544c0f528eeeec0bbe7999bf512c40fe62de24bedba9cf881f3bc24f57ad773"
@@ -106,6 +114,14 @@
             ],
             "index": "pypi",
             "version": "==3.2.3"
+        },
+        "flake8-fixme": {
+            "hashes": [
+                "sha256:226a6f2ef916730899f29ac140bed5d4a17e5aba79f00a0e3ae1eff1997cb1ac",
+                "sha256:50cade07d27a4c30d4f12351478df87339e67640c83041b664724bda6d16f33a"
+            ],
+            "index": "pypi",
+            "version": "==1.1.1"
         },
         "flake8-junit-report": {
             "hashes": [
