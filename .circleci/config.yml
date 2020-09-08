@@ -159,6 +159,7 @@ jobs:
                                 --select T100,T101,T102,T103 \
                                 --tee \
                                 --output ~/circleci-sqlitecache/test-results/fixme/flake8-fixme.txt \
+                                ~/circleci-sqlitecache/ \
                             || true
                             pipenv run flake8_junit \
                                 ~/circleci-sqlitecache/test-results/fixme/flake8-fixme.txt \
@@ -189,6 +190,7 @@ jobs:
                                 --extend-exclude .venv/ \
                                 --tee \
                                 --output ~/circleci-sqlitecache/test-results/flake8/flake8.txt \
+                                ~/circleci-sqlitecache/ \
                             || true
                             pipenv run flake8_junit \
                                 ~/circleci-sqlitecache/test-results/flake8/flake8.txt \
@@ -218,7 +220,7 @@ jobs:
                             pipenv run black \
                                 --target-version py38 \
                                 --diff \
-                                . \
+                                ~/circleci-sqlitecache/ \
                             | tee ~/circleci-sqlitecache/test-results/black/black.diff \
                             | pipenv run python -m utils.patch2xunit \
                                 --output ~/circleci-sqlitecache/test-results/black/black.xml \
