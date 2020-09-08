@@ -5,7 +5,7 @@ import logging
 import re
 import sys
 
-from defusedxml import XMLElementTree as ElementTree
+from defusedxml.ElementTree import XMLElementTree as ElementTree
 
 from sqlitecaching.config import UTCFormatter
 
