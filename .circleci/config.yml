@@ -155,6 +155,7 @@ jobs:
                         name: run flake8 only collecting FIXME / TODO comments and record
                         command: |
                             pipenv run flake8 \
+                                --extend-exclude .venv/ \
                                 --select T101,T102 \
                                 --tee \
                                 --output ~/circleci-sqlitecache/test-results/fixme/flake8-fixme.txt \
@@ -243,11 +244,17 @@ jobs:
                     - run:
                         name: run test_harness.py
                         command: |
-                            pipenv run ./test_harness.py \
+                            pipenv run coverage run \
+                                ./test_harness.py \
                                 --output-dir ~/circleci-sqlitecache/test-results/unittest \
                                 --log-level info \
                                 --test-log-level debug \
                                 --test-level full
+                        when: always
+                    - run:
+                        name: report coverage
+                        command: |
+                            pipenv run coveralls
                         when: always
                     - persist_to_workspace:
                         root: ~/
