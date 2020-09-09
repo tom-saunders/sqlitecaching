@@ -1,11 +1,11 @@
 import logging
 
 from sqlitecaching.exceptions import (
+    SqliteCachingDuplicateCategoryException,
     SqliteCachingDuplicateCauseException,
-    SqliteCachingDuplicateTypeException,
     SqliteCachingException,
+    SqliteCachingMissingCategoryException,
     SqliteCachingMissingCauseException,
-    SqliteCachingMissingTypeException,
 )
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
@@ -19,23 +19,28 @@ class TestSqliteCachingException(SqliteCachingTestBase):
     __TEST_CAUSE = 888
     __TEST_MISSING_CAUSE = 878
 
-    __TestTypeException = SqliteCachingException.register_type(
-        type_name="TestTypeException", type_id=__TEST_TYPE
+    __TestCategoryException = SqliteCachingException.register_category(
+        category_name="TestCategoryException", category_id=__TEST_TYPE
     )
-    __TestCauseException = __TestTypeException.register_cause(
-        cause_name="TestCauseException", cause_id=__TEST_CAUSE, fmt="", req_params=[]
+    __TestCauseException = __TestCategoryException.register_cause(
+        cause_name="TestCauseException", cause_id=__TEST_CAUSE, fmt="", params=[]
     )
 
-    def test_duplicate_type(self):
+    def test_duplicate_category(self):
         with self.assertRaises(SqliteCachingException) as raised_context:
-            DuplicateTestTypeException = (  # noqa: F841
-                SqliteCachingException.register_type(
-                    type_name="DuplicateTestTypeException", type_id=self.__TEST_TYPE
+            DuplicateTestCategoryException = (  # noqa: F841
+                SqliteCachingException.register_category(
+                    category_name="DuplicateTestCategoryException",
+                    category_id=self.__TEST_TYPE,
                 )
             )
         actual = raised_context.exception
-        self.assertEqual(actual.type_id, SqliteCachingDuplicateTypeException._type_id)
-        self.assertEqual(actual.cause_id, SqliteCachingDuplicateTypeException._cause_id)
+        self.assertEqual(
+            actual.category_id, SqliteCachingDuplicateCategoryException._category_id
+        )
+        self.assertEqual(
+            actual.cause_id, SqliteCachingDuplicateCategoryException._cause_id
+        )
 
     def test_duplicate_cause(self):
         with self.assertRaises(SqliteCachingException) as raised_context:
@@ -44,35 +49,43 @@ class TestSqliteCachingException(SqliteCachingTestBase):
                     cause_name="DuplicateTestCauseException",
                     cause_id=self.__TEST_CAUSE,
                     fmt="",
-                    req_params=[],
+                    params=[],
                 )
             )
         actual = raised_context.exception
-        self.assertEqual(actual.type_id, SqliteCachingDuplicateCauseException._type_id)
+        self.assertEqual(
+            actual.category_id, SqliteCachingDuplicateCauseException._category_id
+        )
         self.assertEqual(
             actual.cause_id, SqliteCachingDuplicateCauseException._cause_id
         )
 
-    def test_missing_type(self):
+    def test_missing_category(self):
         with self.assertRaises(SqliteCachingException) as raised_context:
             _ = SqliteCachingException(
-                type_id=self.__TEST_MISSING_TYPE,
+                category_id=self.__TEST_MISSING_TYPE,
                 cause_id=self.__TEST_CAUSE,
                 params={},
                 stacklevel=1,
             )
         actual = raised_context.exception
-        self.assertEqual(actual.type_id, SqliteCachingMissingTypeException._type_id)
-        self.assertEqual(actual.cause_id, SqliteCachingMissingTypeException._cause_id)
+        self.assertEqual(
+            actual.category_id, SqliteCachingMissingCategoryException._category_id
+        )
+        self.assertEqual(
+            actual.cause_id, SqliteCachingMissingCategoryException._cause_id
+        )
 
     def test_missing_cause(self):
         with self.assertRaises(SqliteCachingException) as raised_context:
             _ = SqliteCachingException(
-                type_id=self.__TEST_TYPE,
+                category_id=self.__TEST_TYPE,
                 cause_id=self.__TEST_MISSING_CAUSE,
                 params={},
                 stacklevel=1,
             )
         actual = raised_context.exception
-        self.assertEqual(actual.type_id, SqliteCachingMissingCauseException._type_id)
+        self.assertEqual(
+            actual.category_id, SqliteCachingMissingCauseException._category_id
+        )
         self.assertEqual(actual.cause_id, SqliteCachingMissingCauseException._cause_id)
