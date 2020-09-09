@@ -15,7 +15,7 @@ from sqlitecaching.dict.mapping import (
     CacheDictMappingReservedTableException,
     CacheDictMappingTuple,
 )
-from sqlitecaching.test import CacheDictTestBase, TestLevel, test_level
+from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ Def = namedtuple("Def", ["name", "mapping", "expected", "meta"], defaults=[None]
 
 
 @test_level(TestLevel.PRE_COMMIT)
-class TestCacheDictMapping(CacheDictTestBase):
+class TestCacheDictMapping(SqliteCachingTestBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.res_dir += "mappings/"

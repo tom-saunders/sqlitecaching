@@ -4,13 +4,13 @@ from collections import namedtuple
 import parameterized
 
 from sqlitecaching.dict import CacheDict
-from sqlitecaching.test import CacheDictTestBase, TestLevel, test_level
+from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
 
 
 @test_level(TestLevel.PRE_COMMIT)
-class TestCacheDictPersistence(CacheDictTestBase):
+class TestCacheDictPersistence(SqliteCachingTestBase):
     def provide_test_config(self):
         log.debug("using base persistence configuration")
 
