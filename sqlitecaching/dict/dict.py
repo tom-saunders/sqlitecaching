@@ -6,9 +6,9 @@ from sqlitecaching.exceptions import SqliteCachingException
 
 log = logging.getLogger(__name__)
 
-CacheDictException = SqliteCachingException.register_type(
-    type_name=f"{__name__}.CacheDictException",
-    type_id=1,
+CacheDictException = SqliteCachingException.register_category(
+    category_name=f"{__name__}.CacheDictException",
+    category_id=1,
 )
 __CDE = CacheDictException
 

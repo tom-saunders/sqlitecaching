@@ -11,9 +11,9 @@ log = logging.getLogger(__name__)
 CacheDictMappingTuple = namedtuple("CacheDictMappingTuple", ["table", "keys", "values"])
 
 
-CacheDictMappingException = SqliteCachingException.register_type(
-    type_name=f"{__name__}.CacheDictMappingException",
-    type_id=2,
+CacheDictMappingException = SqliteCachingException.register_category(
+    category_name=f"{__name__}.CacheDictMappingException",
+    category_id=2,
 )
 __CDME = CacheDictMappingException
 
@@ -21,19 +21,19 @@ CacheDictMappingMissingKeysException = __CDME.register_cause(
     cause_name=f"{__name__}.MappingMissingKeys",
     cause_id=0,
     fmt="Mapping must have keys, provided: [{no_keys}]",
-    req_params=["no_keys"],
+    params=["no_keys"],
 )
 CacheDictMappingReservedTableException = __CDME.register_cause(
     cause_name=f"{__name__}.ReservedTableException",
     cause_id=1,
     fmt="table cannot start with sqlite_ : [{table_name}]",
-    req_params=["table_name"],
+    params=["table_name"],
 )
 CacheDictMappingInvalidIdentifierException = __CDME.register_cause(
     cause_name=f"{__name__}.InvalidIdentifierException",
     cause_id=2,
     fmt="identifier provided: [{identifier}] does not match requirements [{re}]",
-    req_params=["identifier", "re"],
+    params=["identifier", "re"],
 )
 CacheDictMappingKeyValOverlapException = __CDME.register_cause(
     cause_name=f"{__name__}.KeyValColumnOverlapException",
@@ -42,13 +42,13 @@ CacheDictMappingKeyValOverlapException = __CDME.register_cause(
         "the sets of key columns and value columns must be disjoint. columns [%s] "
         "occur in both key and value sets"
     ),
-    req_params=["columns"],
+    params=["columns"],
 )
 CacheDictMappingNoIdentifierProvidedException = __CDME.register_cause(
     cause_name=f"{__name__}.NoIdentifierProvidedException",
     cause_id=4,
     fmt="The identifier provided: [%s] does not have a value.",
-    req_params=["identifier"],
+    params=["identifier"],
 )
 CacheDictMappingDuplicateKeyNameException = __CDME.register_cause(
     cause_name=f"{__name__}.DuplicateKeyNameException",
@@ -57,13 +57,13 @@ CacheDictMappingDuplicateKeyNameException = __CDME.register_cause(
         "The key column identifier provided: [%s] has already been added (as "
         "[%s], after casefold())"
     ),
-    req_params=["identifier", "validated_identifier"],
+    params=["identifier", "validated_identifier"],
 )
 CacheDictMappingInvalidSQLTypeException = __CDME.register_cause(
     cause_name=f"{__name__}.InvalidSQLTypeException",
     cause_id=6,
     fmt="sqltype provided: [%s] does not match requirements [%s]",
-    req_params=["sqltype", "re"],
+    params=["sqltype", "re"],
 )
 
 
