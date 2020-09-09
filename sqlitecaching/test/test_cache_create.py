@@ -2,13 +2,13 @@ import logging
 import tempfile
 
 from sqlitecaching.dict import CacheDict
-from sqlitecaching.test import CacheDictTestBase, TestLevel, test_level
+from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
 
 
 @test_level(TestLevel.PRE_COMMIT)
-class TestCacheDictCreation(CacheDictTestBase):
+class TestCacheDictCreation(SqliteCachingTestBase):
     def test_open_anon_memory(self):
         c = CacheDict.open_anon_memory()
         self.assertNotEqual(c, None)
