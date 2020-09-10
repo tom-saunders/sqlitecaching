@@ -1,6 +1,5 @@
 import logging
 import typing
-from collections import namedtuple
 
 log = logging.getLogger(__name__)
 
@@ -8,7 +7,7 @@ log = logging.getLogger(__name__)
 class Cause(typing.NamedTuple):
     name: str
     fmt: str
-    params: typing.Type
+    params: typing.AbstractSet[str]
     exception: typing.Type["SqliteCachingException"]
 
 
@@ -20,6 +19,15 @@ class Category(typing.NamedTuple):
 
 class SqliteCachingException(Exception):
     _categories: typing.ClassVar[typing.Dict[int, Category]] = {}
+
+    _expected_params: typing.AbstractSet[str]
+    _category: Category
+    _cause: Cause
+    _fmt: str
+    category_id: int
+    cause_id: int
+    params: typing.Mapping[str, typing.Any]
+    msg: str
 
     def __init__(
         self,
@@ -35,16 +43,18 @@ class SqliteCachingException(Exception):
             params = {}
         self.params = params
 
-        self._category = self._categories.get(category_id, None)
-        if not self._category:
+        try:
+            self._category = self._categories[category_id]
+        except KeyError:
             raise SqliteCachingException(
                 category_id=0,
                 cause_id=0,
                 params={"category_id": category_id},
                 stacklevel=1,
             )
-        self._cause = self._category.causes.get(cause_id, None)
-        if not self._cause:
+        try:
+            self._cause = self._category.causes[cause_id]
+        except KeyError:
             raise SqliteCachingException(
                 category_id=0,
                 cause_id=2,
@@ -56,21 +66,22 @@ class SqliteCachingException(Exception):
                 stacklevel=1,
             )
         self._fmt = self._cause.fmt
-        self._param_type = self._cause.params
-        self._params = self._param_type(**self.params)
+        self._expected_params = self._cause.params
+        # FIXME this needs to handle parameters properly
+        # self._params = self._param_type(**self.params)
 
-        self._msg = self._fmt.format(**self.params)
+        self.msg = self._fmt.format(**self.params)
 
-        log.error("Exception: [%s]", self._msg)
+        log.error("Exception: [%s]", self.msg)
         log.debug(
             "raising [%s] with msg [%s]",
             type(self).__name__,
-            self._msg,
+            self.msg,
             stack_info=True,
             stacklevel=4,
         )
 
-        super().__init__(self._msg)
+        super().__init__(self.msg)
 
     @classmethod
     def register_category(cls, *, category_name: str, category_id: int):
@@ -158,7 +169,6 @@ class SqliteCachingException(Exception):
                         },
                         stacklevel=1,
                     )
-                Params = namedtuple("Params", params)  # type: ignore
 
                 class CauseException(CategoryException):
                     _cause_id = cause_id
@@ -178,7 +188,7 @@ class SqliteCachingException(Exception):
                 cause = Cause(
                     name=cause_name,
                     fmt=fmt,
-                    params=Params,
+                    params=params,
                     exception=CauseException,
                 )
                 causes[cause_id] = cause
