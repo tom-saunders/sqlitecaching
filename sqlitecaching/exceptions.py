@@ -135,7 +135,16 @@ class SqliteCachingException(Exception):
 
                 category = cls._categories.get(cls._category_id, None)
                 if not category:
-                    raise Exception("e")
+                    raise SqliteCachingException(
+                        category_id=0,
+                        cause_id=4,
+                        params={
+                            "category_id": category_id,
+                            "cause_id": cause_id,
+                            "cause_name": cause_name,
+                        },
+                        stacklevel=1,
+                    )
                 causes = category.causes
                 existing_cause = causes.get(cause_id, None)
                 if existing_cause:
@@ -222,4 +231,17 @@ SqliteCachingDuplicateCauseException = SqliteCachingMetaException.register_cause
         "cannot overwrite with [{cause_name}]"
     ),
     params=["cause_id", "existing_cause_name", "cause_name"],
+)
+SqliteCachingNoCategoryForCauseException = SqliteCachingMetaException.register_cause(
+    cause_name=f"{__name__}.SqliteCachingNoCategoryForCauseException",
+    cause_id=4,
+    fmt=(
+        "No matching category was found with category_id [{category_id}] when "
+        "registering exception with cause_id [{cause_id} ({cause_name})]"
+    ),
+    params=[
+        "category_id",
+        "cause_id",
+        "cause_name",
+    ],
 )
