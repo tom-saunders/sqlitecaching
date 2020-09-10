@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "13dda46c604ea5f107be1102d42e52e642f8dca0acf5eda08260efb7ceb12c8d"
+            "sha256": "c2bee5e156120353312fafdeaf6e6bd61c9569fde0e4420d7b7083d986ec2318"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -15,23 +15,7 @@
             }
         ]
     },
-    "default": {
-        "defusedxml": {
-            "hashes": [
-                "sha256:6687150770438374ab581bb7a1b327a847dd9c5749e396102de3fad4e8a3ef93",
-                "sha256:f684034d135af4c6cbb949b8a4d2ed61634515257a67299e5f940fbaa34377f5"
-            ],
-            "index": "pypi",
-            "version": "==0.6.0"
-        },
-        "ordered-enum": {
-            "hashes": [
-                "sha256:6544c0f528eeeec0bbe7999bf512c40fe62de24bedba9cf881f3bc24f57ad773"
-            ],
-            "index": "pypi",
-            "version": "==0.0.6"
-        }
-    },
+    "default": {},
     "develop": {
         "appdirs": {
             "hashes": [
@@ -236,11 +220,11 @@
         },
         "isort": {
             "hashes": [
-                "sha256:92533892058de0306e51c88f22ece002a209dc8e80288aa3cec6d443060d584f",
-                "sha256:a200d47b7ee8b7f7d0a9646650160c4a51b6a91a9413fd31b1da2c4de789f5d3"
+                "sha256:171c5f365791073426b5ed3a156c2081a47f88c329161fd28228ff2da4c97ddb",
+                "sha256:ba91218eee31f1e300ecc079ef0c524cea3fc41bfbb979cbdf5fd3a889e3cfed"
             ],
             "index": "pypi",
-            "version": "==5.5.1"
+            "version": "==5.5.2"
         },
         "mccabe": {
             "hashes": [

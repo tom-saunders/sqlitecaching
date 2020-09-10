@@ -22,8 +22,6 @@ coveralls = "~=2.1"
 mypy = "~=0.782"
 
 [packages]
-ordered-enum = "~=0.0"
-defusedxml = "~=0.6"
 
 [requires]
 python_version = "3.8"

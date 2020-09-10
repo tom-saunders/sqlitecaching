@@ -293,4 +293,4 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         actual = raised_context.exception
         self.assertEqual(actual.category_id, expected._category_id)
         self.assertEqual(actual.cause_id, expected._cause_id)
-        log.info(raised_context.exception._params)
+        log.info(raised_context.exception._expected_params)
