@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 class Cause(typing.NamedTuple):
     name: str
     fmt: str
-    params: typing.AbstractSet[str]
+    params: typing.FrozenSet[str]
     exception: typing.Type["SqliteCachingException"]
 
 
@@ -19,8 +19,9 @@ class Category(typing.NamedTuple):
 
 class SqliteCachingException(Exception):
     _categories: typing.ClassVar[typing.Dict[int, Category]] = {}
+    _raise_on_unexpected_params: typing.ClassVar[bool] = False
 
-    _expected_params: typing.AbstractSet[str]
+    _expected_params: typing.FrozenSet[str]
     _category: Category
     _cause: Cause
     _fmt: str
@@ -39,8 +40,6 @@ class SqliteCachingException(Exception):
     ):
         self.category_id = category_id
         self.cause_id = cause_id
-        if not params:
-            params = {}
         self.params = params
 
         try:
@@ -67,6 +66,45 @@ class SqliteCachingException(Exception):
             )
         self._fmt = self._cause.fmt
         self._expected_params = self._cause.params
+        provided_params = frozenset(self.params.keys())
+
+        missing_params = self._expected_params - provided_params
+        if missing_params:
+            log.error("expected parameters not provided: [%s]", missing_params)
+            raise SqliteCachingException(
+                category_id=0,
+                cause_id=5,
+                params={
+                    "category_id": category_id,
+                    "category_name": self._category.name,
+                    "cause_id": cause_id,
+                    "cause_name": self._cause.name,
+                    "missing_params": missing_params,
+                },
+                stacklevel=1,
+            )
+
+        self.additional_params = {
+            k: self.params[k] for k in (provided_params - self._expected_params)
+        }
+        if self.additional_params:
+            log.warning(
+                "unexpected additional parameters provided: [%s]",
+                self.additional_params,
+            )
+            if self._raise_on_unexpected_params:
+                raise SqliteCachingException(
+                    category_id=0,
+                    cause_id=6,
+                    params={
+                        "category_id": category_id,
+                        "category_name": self._category.name,
+                        "cause_id": cause_id,
+                        "cause_name": self._cause.name,
+                        "additional_params": self.additional_params,
+                    },
+                    stacklevel=1,
+                )
         # FIXME this needs to handle parameters properly
         # self._params = self._param_type(**self.params)
 
@@ -134,7 +172,7 @@ class SqliteCachingException(Exception):
                 cause_name: str,
                 cause_id: int,
                 fmt: str,
-                params: typing.AbstractSet[str],
+                params: typing.FrozenSet[str],
             ):
                 log.info(
                     "registering cause [%s] for category [%d (%s)] with id [%d]",
@@ -213,7 +251,7 @@ SqliteCachingMissingCategoryException = SqliteCachingMetaException.register_caus
     cause_name=f"{__name__}.SqliteCachingMissingCategoryException",
     cause_id=0,
     fmt="No category matching {category_id} was found",
-    params=["category_id"],
+    params=frozenset(["category_id"]),
 )
 SqliteCachingDuplicateCategoryException = SqliteCachingMetaException.register_cause(
     cause_name=f"{__name__}.SqliteCachingDuplicateCategoryException",
@@ -222,7 +260,7 @@ SqliteCachingDuplicateCategoryException = SqliteCachingMetaException.register_ca
         "previously registered category with id [{category_id} "
         "({existing_category_name})], cannot overwrite with [{category_name}]"
     ),
-    params=["category_id", "existing_category_name", "category_name"],
+    params=frozenset(["category_id", "existing_category_name", "category_name"]),
 )
 SqliteCachingMissingCauseException = SqliteCachingMetaException.register_cause(
     cause_name=f"{__name__}.SqliteCachingMissingCauseException",
@@ -231,7 +269,7 @@ SqliteCachingMissingCauseException = SqliteCachingMetaException.register_cause(
         "No cause matching {cause_id} was found for category: [{category_id} "
         "({category_name})]"
     ),
-    params=["cause_id", "category_id", "category_name"],
+    params=frozenset(["cause_id", "category_id", "category_name"]),
 )
 SqliteCachingDuplicateCauseException = SqliteCachingMetaException.register_cause(
     cause_name=f"{__name__}.SqliteCachingMissingCauseException",
@@ -240,7 +278,7 @@ SqliteCachingDuplicateCauseException = SqliteCachingMetaException.register_cause
         "previously registered cause with id [{cause_id} ({existing_cause_name})], "
         "cannot overwrite with [{cause_name}]"
     ),
-    params=["cause_id", "existing_cause_name", "cause_name"],
+    params=frozenset(["cause_id", "existing_cause_name", "cause_name"]),
 )
 SqliteCachingNoCategoryForCauseException = SqliteCachingMetaException.register_cause(
     cause_name=f"{__name__}.SqliteCachingNoCategoryForCauseException",
@@ -249,9 +287,47 @@ SqliteCachingNoCategoryForCauseException = SqliteCachingMetaException.register_c
         "No matching category was found with category_id [{category_id}] when "
         "registering exception with cause_id [{cause_id} ({cause_name})]"
     ),
-    params=[
-        "category_id",
-        "cause_id",
-        "cause_name",
-    ],
+    params=frozenset(
+        [
+            "category_id",
+            "cause_id",
+            "cause_name",
+        ],
+    ),
+)
+SqliteCachingMissingParametersException = SqliteCachingMetaException.register_cause(
+    cause_name=f"{__name__}.SqliteCachingMissingParametersException",
+    cause_id=5,
+    fmt=(
+        "expected parameters were not provided when raising exception "
+        " with category [{category_id ({category_name})], cause [{cause_id} "
+        "({cause_name})]: [{expected_params}]"
+    ),
+    params=frozenset(
+        [
+            "category_id",
+            "category_name",
+            "cause_id",
+            "cause_name",
+            "expected_params",
+        ],
+    ),
+)
+SqliteCachingAdditionalParametersException = SqliteCachingMetaException.register_cause(
+    cause_name=f"{__name__}.SqliteCachingAdditionalParametersException",
+    cause_id=6,
+    fmt=(
+        "Unexpected additional parameters were provided when raising exception "
+        " with category [{category_id ({category_name})], cause [{cause_id} "
+        "({cause_name})]: [{additional_params}]"
+    ),
+    params=frozenset(
+        [
+            "category_id",
+            "category_name",
+            "cause_id",
+            "cause_name",
+            "additional_params",
+        ],
+    ),
 )

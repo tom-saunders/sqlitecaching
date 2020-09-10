@@ -21,19 +21,19 @@ CacheDictMappingMissingKeysException = __CDME.register_cause(
     cause_name=f"{__name__}.MappingMissingKeys",
     cause_id=0,
     fmt="Mapping must have keys, provided: [{no_keys}]",
-    params=["no_keys"],
+    params=frozenset(["no_keys"]),
 )
 CacheDictMappingReservedTableException = __CDME.register_cause(
     cause_name=f"{__name__}.ReservedTableException",
     cause_id=1,
     fmt="table cannot start with sqlite_ : [{table_name}]",
-    params=["table_name"],
+    params=frozenset(["table_name"]),
 )
 CacheDictMappingInvalidIdentifierException = __CDME.register_cause(
     cause_name=f"{__name__}.InvalidIdentifierException",
     cause_id=2,
     fmt="identifier provided: [{identifier}] does not match requirements [{re}]",
-    params=["identifier", "re"],
+    params=frozenset(["identifier", "re"]),
 )
 CacheDictMappingKeyValOverlapException = __CDME.register_cause(
     cause_name=f"{__name__}.KeyValColumnOverlapException",
@@ -42,13 +42,13 @@ CacheDictMappingKeyValOverlapException = __CDME.register_cause(
         "the sets of key columns and value columns must be disjoint. columns [%s] "
         "occur in both key and value sets"
     ),
-    params=["columns"],
+    params=frozenset(["columns"]),
 )
 CacheDictMappingNoIdentifierProvidedException = __CDME.register_cause(
     cause_name=f"{__name__}.NoIdentifierProvidedException",
     cause_id=4,
     fmt="The identifier provided: [%s] does not have a value.",
-    params=["identifier"],
+    params=frozenset(["identifier"]),
 )
 CacheDictMappingDuplicateKeyNameException = __CDME.register_cause(
     cause_name=f"{__name__}.DuplicateKeyNameException",
@@ -57,13 +57,13 @@ CacheDictMappingDuplicateKeyNameException = __CDME.register_cause(
         "The key column identifier provided: [%s] has already been added (as "
         "[%s], after casefold())"
     ),
-    params=["identifier", "validated_identifier"],
+    params=frozenset(["identifier", "validated_identifier"]),
 )
 CacheDictMappingInvalidSQLTypeException = __CDME.register_cause(
     cause_name=f"{__name__}.InvalidSQLTypeException",
     cause_id=6,
     fmt="sqltype provided: [%s] does not match requirements [%s]",
-    params=["sqltype", "re"],
+    params=frozenset(["sqltype", "re"]),
 )
 
 
