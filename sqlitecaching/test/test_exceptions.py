@@ -142,6 +142,25 @@ class TestSqliteCachingException(SqliteCachingTestBase):
         )
         self.assertEqual(actual.cause_id, SqliteCachingMissingParamsException._cause_id)
 
+    def test_missing_and_additional_params(self):
+        with self.assertRaises(SqliteCachingException) as raised_context:
+            try:
+                SqliteCachingException.raise_on_additional_params(True)
+                _ = SqliteCachingException(
+                    category_id=self.__TEST_CATEGORY,
+                    cause_id=self.__TEST_PARAMS_CAUSE,
+                    params={"x": "x"},
+                    stacklevel=1,
+                )
+            finally:
+                SqliteCachingException.raise_on_additional_params(False)
+        actual = raised_context.exception
+        self.assertEqual(
+            actual.category_id,
+            SqliteCachingMissingParamsException._category_id,
+        )
+        self.assertEqual(actual.cause_id, SqliteCachingMissingParamsException._cause_id)
+
     def test_additional_params(self):
         successful_pre = SqliteCachingException(
             category_id=self.__TEST_CATEGORY,
