@@ -2,6 +2,7 @@ import collections
 import logging
 import re
 import sqlite3
+import typing
 from collections import namedtuple
 
 from sqlitecaching.exceptions import SqliteCachingException
@@ -66,11 +67,40 @@ CacheDictMappingInvalidSQLTypeException = __CDME.register_cause(
     params=frozenset(["sqltype", "re"]),
 )
 
+Ident = typing.NewType("Ident", str)
+SqlType = typing.NewType("SqlType", str)
+
+ValidIdent = typing.NewType("ValidIdent", str)
+ValidSqlType = typing.NewType("ValidSqlType", str)
+
+SqlStatement = typing.NewType("SqlStatement", str)
+
 
 class CacheDictMapping:
-    def __init__(self, *, table, keys, values):
+
+    _create_statement: typing.Optional[SqlStatement]
+    _clear_statement: typing.Optional[SqlStatement]
+    _delete_statement: typing.Optional[SqlStatement]
+    _upsert_statement: typing.Optional[SqlStatement]
+    _remove_statement: typing.Optional[SqlStatement]
+    _length_statement: typing.Optional[SqlStatement]
+    _keys_statement: typing.Optional[SqlStatement]
+    _items_statement: typing.Optional[SqlStatement]
+    _values_statement: typing.Optional[SqlStatement]
+
+    def __init__(
+        self,
+        *,
+        table: Ident,
+        keys: typing.Mapping[Ident, typing.Optional[SqlType]],
+        values: typing.Optional[typing.Mapping[Ident, typing.Optional[SqlType]]],
+    ):
         if not keys:
             raise CacheDictMappingMissingKeysException(params={"no_keys": keys})
+
+        if values is None:
+            log.info("providing empty dict for values")
+            values = {}
 
         validated_table = self._validate_identifier(identifier=table)
         if validated_table.startswith("sqlite_"):
@@ -78,9 +108,9 @@ class CacheDictMapping:
                 params={"table_name": validated_table},
             )
 
-        key_columns = collections.OrderedDict()
-        value_columns = collections.OrderedDict()
-        keyval_columns = []
+        key_columns: typing.Dict[ValidIdent, ValidSqlType] = collections.OrderedDict()
+        value_columns: typing.Dict[ValidIdent, ValidSqlType] = collections.OrderedDict()
+        keyval_columns: typing.FrozenSet = frozenset()
 
         unset_value = object()
         for (name, sqltype) in keys.items():
@@ -101,7 +131,7 @@ class CacheDictMapping:
             validated_name = self._validate_identifier(identifier=name)
             in_keys = key_columns.get(validated_name, unset_value)
             if in_keys is not unset_value:
-                keyval_columns.append(validated_name)
+                keyval_columns = keyval_columns | frozenset([validated_name])
             else:
                 self._handle_column(
                     column_dict=value_columns,
@@ -113,8 +143,8 @@ class CacheDictMapping:
             keyval_str = "'" + "', '".join(keyval_columns) + "'"
             raise CacheDictMappingKeyValOverlapException(params={"columns": keyval_str})
 
-        self.Keys = namedtuple("Keys", sorted(key_columns.keys()))
-        self.Values = namedtuple("Values", sorted(value_columns.keys()))
+        self.Keys = namedtuple("Keys", sorted(key_columns.keys()))  # type: ignore
+        self.Values = namedtuple("Values", sorted(value_columns.keys()))  # type: ignore
 
         self.key_info = self.Keys(**key_columns)
         self.value_info = self.Values(**value_columns)
@@ -153,7 +183,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    def create_statement(self):
+    def create_statement(self) -> SqlStatement:
         if self._create_statement:
             return self._create_statement
 
@@ -205,8 +235,9 @@ class CacheDictMapping:
             create_lines.append(line.rstrip())
         # needed for trailing newline
         create_lines.append("")
-        self._create_statement = "\n".join(create_lines)
-        return self._create_statement
+        create_statement = SqlStatement("\n".join(create_lines))
+        self._create_statement = create_statement
+        return create_statement
 
     # fmt: off
     _CLEAR_FMT = (
@@ -215,7 +246,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    def clear_statement(self):
+    def clear_statement(self) -> SqlStatement:
         if self._clear_statement:
             return self._clear_statement
 
@@ -230,8 +261,9 @@ class CacheDictMapping:
             clear_lines.append(line.rstrip())
         # needed for trailing newline
         clear_lines.append("")
-        self._clear_statement = "\n".join(clear_lines)
-        return self._clear_statement
+        clear_statement = SqlStatement("\n".join(clear_lines))
+        self._clear_statement = clear_statement
+        return clear_statement
 
     # fmt: off
     _DELETE_FMT = (
@@ -240,7 +272,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    def delete_statement(self):
+    def delete_statement(self) -> SqlStatement:
         if self._delete_statement:
             return self._delete_statement
 
@@ -255,8 +287,9 @@ class CacheDictMapping:
             delete_lines.append(line.rstrip())
         # needed for trailing newline
         delete_lines.append("")
-        self._delete_statement = "\n".join(delete_lines)
-        return self._delete_statement
+        delete_statement = SqlStatement("\n".join(delete_lines))
+        self._delete_statement = delete_statement
+        return delete_statement
 
     # fmt: off
     _UPSERT_FMT = (
@@ -285,7 +318,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    def upsert_statement(self):
+    def upsert_statement(self) -> SqlStatement:
         if self._upsert_statement:
             return self._upsert_statement
 
@@ -341,8 +374,9 @@ class CacheDictMapping:
             upsert_lines.append(line.rstrip())
         # needed for trailing newline
         upsert_lines.append("")
-        self._upsert_statement = "\n".join(upsert_lines)
-        return self._upsert_statement
+        upsert_statement = SqlStatement("\n".join(upsert_lines))
+        self._upsert_statement = upsert_statement
+        return upsert_statement
 
     # fmt: off
     _REMOVE_FMT = (
@@ -358,7 +392,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    def remove_statement(self):
+    def remove_statement(self) -> SqlStatement:
         if self._remove_statement:
             return self._remove_statement
 
@@ -383,8 +417,9 @@ class CacheDictMapping:
             remove_lines.append(line.rstrip())
         # needed for trailing newline
         remove_lines.append("")
-        self._remove_statement = "\n".join(remove_lines)
-        return self._remove_statement
+        remove_statement = SqlStatement("\n".join(remove_lines))
+        self._remove_statement = remove_statement
+        return remove_statement
 
     # fmt: off
     _LENGTH_FMT = (
@@ -393,7 +428,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    def length_statement(self):
+    def length_statement(self) -> SqlStatement:
         if self._length_statement:
             return self._length_statement
 
@@ -408,8 +443,9 @@ class CacheDictMapping:
             length_lines.append(line.rstrip())
         # needed for trailing newline
         length_lines.append("")
-        self._length_statement = "\n".join(length_lines)
-        return self._length_statement
+        length_statement = SqlStatement("\n".join(length_lines))
+        self._length_statement = length_statement
+        return length_statement
 
     # fmt: off
     _KEYS_FMT = (
@@ -420,7 +456,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    def keys_statement(self):
+    def keys_statement(self) -> SqlStatement:
         if self._keys_statement:
             return self._keys_statement
 
@@ -442,8 +478,9 @@ class CacheDictMapping:
             keys_lines.append(line.rstrip())
         # needed for trailing newline
         keys_lines.append("")
-        self._keys_statement = "\n".join(keys_lines)
-        return self._keys_statement
+        keys_statement = SqlStatement("\n".join(keys_lines))
+        self._keys_statement = keys_statement
+        return keys_statement
 
     # fmt: off
     _ITEMS_FMT = (
@@ -455,7 +492,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    def items_statement(self):
+    def items_statement(self) -> SqlStatement:
         if self._items_statement:
             return self._items_statement
 
@@ -485,8 +522,9 @@ class CacheDictMapping:
             items_lines.append(line.rstrip())
         # needed for trailing newline
         items_lines.append("")
-        self._items_statement = "\n".join(items_lines)
-        return self._items_statement
+        items_statement = SqlStatement("\n".join(items_lines))
+        self._items_statement = items_statement
+        return items_statement
 
     # fmt: off
     _VALUES_FMT = (
@@ -497,7 +535,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    def values_statement(self):
+    def values_statement(self) -> SqlStatement:
         if self._values_statement:
             return self._values_statement
 
@@ -522,11 +560,18 @@ class CacheDictMapping:
             values_lines.append(line.rstrip())
         # needed for trailing newline
         values_lines.append("")
-        self._values_statement = "\n".join(values_lines)
-        return self._values_statement
+        values_statement = SqlStatement("\n".join(values_lines))
+        self._values_statement = values_statement
+        return values_statement
 
     @classmethod
-    def _handle_column(cls, *, column_dict, validated_name, sqltype):
+    def _handle_column(
+        cls,
+        *,
+        column_dict: typing.Dict[ValidIdent, ValidSqlType],
+        validated_name: ValidIdent,
+        sqltype: typing.Optional[SqlType],
+    ) -> None:
         validated_sqltype = cls._validate_sqltype(sqltype=sqltype)
         column_dict[validated_name] = validated_sqltype
 
@@ -545,7 +590,7 @@ class CacheDictMapping:
     )
 
     @classmethod
-    def _validate_identifier(cls, *, identifier):
+    def _validate_identifier(cls, *, identifier: Ident) -> ValidIdent:
         if not identifier:
             raise CacheDictMappingNoIdentifierProvidedException(
                 params={"identifier": identifier},
@@ -559,7 +604,7 @@ class CacheDictMapping:
                 ),
                 identifier,
             )
-            identifier = identifier.strip()
+            identifier = Ident(identifier.strip())
         match = cls._IDENTIFIER_PATTERN.match(identifier)
         if not match:
             fmt = (
@@ -585,11 +630,17 @@ class CacheDictMapping:
                 lower_identifier,
             )
 
-        return lower_identifier
+        return ValidIdent(lower_identifier)
 
     @classmethod
-    def _validate_sqltype(cls, *, sqltype):
-        if sqltype != sqltype.strip():
+    def _validate_sqltype(cls, *, sqltype: typing.Optional[SqlType]) -> ValidSqlType:
+        if not sqltype:
+            log.info(
+                "sqltype provided [%s] will be replaced with an empty string",
+                sqltype,
+            )
+            sqltype = SqlType("")
+        elif sqltype != sqltype.strip():
             log.info(
                 (
                     "sqlitecaching sqltype provided: [%s] has whitespace "
@@ -597,15 +648,15 @@ class CacheDictMapping:
                 ),
                 sqltype,
             )
-            sqltype = sqltype.strip()
+            sqltype = SqlType(sqltype.strip())
         if not sqltype:
-            return ""
+            return ValidSqlType("")
         match = cls._IDENTIFIER_PATTERN.match(sqltype)
         if not match:
             raise CacheDictMappingInvalidSQLTypeException(
                 params={"sqltype": sqltype, "re": cls._IDENTIFIER_RE_DEFN},
             )
-        upper_sqltype = sqltype.upper()
+        upper_sqltype = ValidSqlType(sqltype.upper())
         if sqltype != upper_sqltype:
             log.warning(
                 (

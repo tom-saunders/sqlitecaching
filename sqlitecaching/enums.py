@@ -1,6 +1,7 @@
 import enum
 import functools
 import logging
+import typing
 
 from sqlitecaching.exceptions import SqliteCachingException
 
@@ -59,6 +60,8 @@ EnumValueConversionException = EnumException.register_cause(
     ),
 )
 
+T = typing.TypeVar("T", bound="LevelledEnum")
+
 
 @functools.total_ordering
 class LevelledEnum(enum.Enum):
@@ -108,7 +111,7 @@ class LevelledEnum(enum.Enum):
         return NotImplemented
 
     @classmethod
-    def convert(cls, value):
+    def convert(cls: typing.Type[T], value: str) -> T:
         for candidate in cls:
             if value.replace("-", "_").casefold() == candidate._name_.casefold():
                 return candidate
@@ -120,8 +123,8 @@ class LevelledEnum(enum.Enum):
         )
 
     @classmethod
-    def value_strs(cls):
-        values = frozenset([])
+    def value_strs(cls) -> typing.FrozenSet[str]:
+        values: typing.FrozenSet[str] = frozenset([])
         for candidate in cls:
             values = values | frozenset([candidate._name_.replace("_", "-").casefold()])
         return values
