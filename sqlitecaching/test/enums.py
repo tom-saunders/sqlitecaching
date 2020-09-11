@@ -1,6 +1,9 @@
-from sqlitecaching.enums import Level, LevelledEnum
+import enum
+
+from sqlitecaching.enums import LevelledEnum
 
 
+@enum.unique
 class TestLevel(LevelledEnum):
-    PRE_COMMIT = Level("pre-commit", 10)
-    FULL = Level("full", 100)
+    PRE_COMMIT = 10
+    FULL = 100

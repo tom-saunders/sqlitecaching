@@ -73,7 +73,7 @@ class Config:
                 )
 
             log_handler = logging.FileHandler(log_path)
-            log_handler.setLevel(log_level.value[1])
+            log_handler.setLevel(log_level.value)
 
             log_formatter = UTCFormatter()
             log_handler.setFormatter(log_formatter)
@@ -100,7 +100,7 @@ class Config:
                 )
 
             debug_handler = logging.FileHandler(debug_path)
-            debug_handler.setLevel(debug_level.value[1])
+            debug_handler.setLevel(debug_level.value)
 
             debug_format = (
                 "%(asctime)s %(levelname)-4.4s: %(funcName)16s: %(message)s "
@@ -118,17 +118,6 @@ class Config:
             )
 
         log.debug("(re)set up logger: %s", self.logger.name)
-
-    def get_sub_logger(self, sub_ident):
-        if sub_ident.startswith(f"{self.logger.name}."):
-            ident = sub_ident
-        else:
-            ident = f"{self.logger.name}.{sub_ident}"
-
-        sub_logger = logging.getLogger(ident)
-        sub_logger.info("got sub_logger: %s", ident)
-
-        return sub_logger
 
     def set_log_output(self, log_output):
         self.log_output = log_output

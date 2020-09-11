@@ -617,7 +617,7 @@ class CacheDictMapping:
             )
 
         if upper_sqltype not in sqlite3.converters:
-            log.warn(
+            log.warning(
                 (
                     "sqltype [%s] is not currently present in sqlite3.converters. "
                     "if sqlite cannot default convert, it may be returned as bytes()"
