@@ -126,7 +126,7 @@ class SqliteCachingException(Exception):
         /,
     ):
         if should_raise is not None:
-            log.warn(
+            log.warning(
                 "setting [%s]._raise_on_additional_params to [%s]",
                 cls.__name__,
                 should_raise,
