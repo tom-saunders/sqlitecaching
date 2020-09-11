@@ -152,7 +152,7 @@ class CacheDict(UserDict):
 
     @classmethod
     def _create_from_conn(cls, *, conn, mapping=None, log_name=None):
-        log.warn(
+        log.warning(
             "creating CacheDict from existing connection may lead to "
             "unexpected behaviour",
         )

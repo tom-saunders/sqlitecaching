@@ -42,21 +42,21 @@ def handle_arguments():
         "--log-level",
         default="warning",
         type=str,
-        choices=[level.casefold() for level in LogLevel.values()],
+        choices=[level.casefold() for level in LogLevel.value_strs()],
     )
     argparser.add_argument(
         "-t",
         "--test-level",
         default="pre-commit",
         type=str,
-        choices=TestLevel.values(),
+        choices=TestLevel.value_strs(),
     )
     argparser.add_argument(
         "-T",
         "--test-log-level",
         default="notset",
         type=str,
-        choices=[level.casefold() for level in LogLevel.values()],
+        choices=[level.casefold() for level in LogLevel.value_strs()],
     )
     argparser.add_argument(
         "-O",
@@ -72,7 +72,7 @@ def handle_arguments():
         os.makedirs(args.output_dir)
     testconfig.set_output_dir(args.output_dir)
 
-    log_level = LogLevel.convert(args.log_level).value[1]
+    log_level = LogLevel.convert(args.log_level).value
     test_log_level = LogLevel.convert(args.test_log_level)
 
     root_logger = logging.getLogger()
