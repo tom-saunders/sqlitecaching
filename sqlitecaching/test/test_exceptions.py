@@ -55,6 +55,11 @@ class TestSqliteCachingException(SqliteCachingTestBase):
         ),
     )
 
+    def test_successful_create(self):
+        successful = self.__TestCauseException(params={})
+        self.assertEqual(successful.category_id, self.__TestCauseException._category_id)
+        self.assertEqual(successful.cause_id, self.__TestCauseException._cause_id)
+
     def test_duplicate_category(self):
         with self.assertRaises(SqliteCachingException) as raised_context:
             _ = SqliteCachingException.register_category(  # noqa: F841
