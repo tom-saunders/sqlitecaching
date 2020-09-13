@@ -20,15 +20,10 @@ class Category(typing.NamedTuple):
 class SqliteCachingException(Exception):
     _categories: typing.ClassVar[typing.Dict[int, Category]] = {}
     _raise_on_additional_params: typing.ClassVar[bool] = False
-
-    _expected_params: typing.FrozenSet[str]
-    _category: Category
-    _cause: Cause
-    _fmt: str
-    category_id: int
-    cause_id: int
-    params: typing.Mapping[str, typing.Any]
-    msg: str
+    _register_category: typing.Callable[
+        [typing.Any, str, int],
+        typing.Type["SqliteCachingException"],
+    ]
 
     def __init__(
         self,
@@ -136,124 +131,160 @@ class SqliteCachingException(Exception):
 
     @classmethod
     def register_category(cls, *, category_name: str, category_id: int):
-        log.info("registering category [%s] with id [%d]", category_name, category_id)
-        existing_category = cls._categories.get(category_id, None)
-        if existing_category:
-            log.error(
-                (
-                    "previously registered category with id [%d (%s)], cannot "
-                    "overwrite with [%s]"
-                ),
-                category_id,
-                existing_category.name,
-                category_name,
+        return cls._register_category(cls, category_name, category_id)
+
+
+def __register_cause(
+    cls,
+    cause_name: str,
+    cause_id: int,
+    fmt: str,
+    params: typing.FrozenSet[str],
+    /,
+):
+    log.info(
+        "registering cause [%s] for category [%d (%s)] with id [%d]",
+        cause_name,
+        cls._category_id,
+        cls._category_name,
+        cause_id,
+    )
+
+    category = cls._categories.get(cls._category_id, None)
+    if not category:
+        raise SqliteCachingException(
+            category_id=0,
+            cause_id=4,
+            params={
+                "category_id": cls._category_id,
+                "cause_id": cause_id,
+                "cause_name": cause_name,
+            },
+            stacklevel=1,
+        )
+    causes = category.causes
+    existing_cause = causes.get(cause_id, None)
+    if existing_cause:
+        raise SqliteCachingException(
+            category_id=0,
+            cause_id=3,
+            params={
+                "cause_id": cause_id,
+                "existing_cause_name": existing_cause.name,
+                "cause_name": cause_name,
+            },
+            stacklevel=1,
+        )
+    category_exception: typing.Any = category.exception
+
+    class CauseException(category_exception):
+        _cause_id: typing.ClassVar[int] = cause_id
+        _cause_name: typing.ClassVar[str] = cause_name
+
+        cause_id_: int
+        params: typing.Mapping[str, typing.Any]
+        msg: str
+
+        _expected_params: typing.FrozenSet[str]
+        _cause: Cause
+        _fmt: str
+
+        def __init__(
+            self,
+            *,
+            params: typing.Mapping[str, typing.Any],
+            stacklevel: int = 2,
+        ):
+            super().__init__(
+                cause_id=self._cause_id,
+                params=params,
+                stacklevel=(stacklevel + 1),
             )
-            raise SqliteCachingException(
-                category_id=0,
-                cause_id=1,
-                params={
-                    "category_id": category_id,
-                    "existing_category_name": existing_category.name,
-                    "category_name": category_name,
-                },
-                stacklevel=1,
+
+    cause = Cause(
+        name=cause_name,
+        fmt=fmt,
+        params=params,
+        exception=CauseException,
+    )
+    causes[cause_id] = cause
+
+    CauseException.__name__ = cause_name
+    CauseException.__qualname__ = cause_name
+    return CauseException
+
+
+def __register_category(cls, category_name: str, category_id: int, /):
+    log.info("registering category [%s] with id [%d]", category_name, category_id)
+    existing_category = cls._categories.get(category_id, None)
+    if existing_category:
+        log.error(
+            (
+                "previously registered category with id [%d (%s)], cannot "
+                "overwrite with [%s]"
+            ),
+            category_id,
+            existing_category.name,
+            category_name,
+        )
+        raise SqliteCachingException(
+            category_id=0,
+            cause_id=1,
+            params={
+                "category_id": category_id,
+                "existing_category_name": existing_category.name,
+                "category_name": category_name,
+            },
+            stacklevel=1,
+        )
+
+    class CategoryException(SqliteCachingException):
+        _category_id: typing.ClassVar[int] = category_id
+        _category_name: typing.ClassVar[str] = category_name
+        _register_cause: typing.Callable[
+            [typing.Any, str, int, str, typing.FrozenSet[str]],
+            typing.Type[SqliteCachingException],
+        ]
+
+        category_id_: int
+        _category: Category
+
+        def __init__(
+            self,
+            *,
+            cause_id: int,
+            params: typing.Mapping[str, typing.Any],
+            stacklevel: int,
+        ):
+            super().__init__(
+                category_id=self._category_id,
+                cause_id=cause_id,
+                params=params,
+                stacklevel=(stacklevel + 1),
             )
 
-        class CategoryException(SqliteCachingException):
+        @classmethod
+        def register_cause(
+            cls,
+            *,
+            cause_name: str,
+            cause_id: int,
+            fmt: str,
+            params: typing.FrozenSet[str],
+        ):
+            return cls._register_cause(cls, cause_name, cause_id, fmt, params)
 
-            _category_id: typing.ClassVar[int] = category_id
-            _category_name: typing.ClassVar[str] = category_name
+    CategoryException._register_cause = __register_cause
 
-            def __init__(
-                self,
-                *,
-                cause_id: int,
-                params: typing.Mapping[str, typing.Any],
-                stacklevel: int,
-            ):
-                super().__init__(
-                    category_id=self._category_id,
-                    cause_id=cause_id,
-                    params=params,
-                    stacklevel=(stacklevel + 1),
-                )
+    category = Category(name=category_name, exception=CategoryException, causes={})
+    cls._categories[category_id] = category
 
-            @classmethod
-            def register_cause(
-                cls,
-                *,
-                cause_name: str,
-                cause_id: int,
-                fmt: str,
-                params: typing.FrozenSet[str],
-            ):
-                log.info(
-                    "registering cause [%s] for category [%d (%s)] with id [%d]",
-                    cause_name,
-                    cls._category_id,
-                    cls._category_name,
-                    cause_id,
-                )
+    CategoryException.__name__ = category_name
+    CategoryException.__qualname__ = category_name
+    return CategoryException
 
-                category = cls._categories.get(cls._category_id, None)
-                if not category:
-                    raise SqliteCachingException(
-                        category_id=0,
-                        cause_id=4,
-                        params={
-                            "category_id": category_id,
-                            "cause_id": cause_id,
-                            "cause_name": cause_name,
-                        },
-                        stacklevel=1,
-                    )
-                causes = category.causes
-                existing_cause = causes.get(cause_id, None)
-                if existing_cause:
-                    raise SqliteCachingException(
-                        category_id=0,
-                        cause_id=3,
-                        params={
-                            "cause_id": cause_id,
-                            "existing_cause_name": existing_cause.name,
-                            "cause_name": cause_name,
-                        },
-                        stacklevel=1,
-                    )
 
-                class CauseException(CategoryException):
-                    _cause_id = cause_id
-
-                    def __init__(
-                        self,
-                        *,
-                        params: typing.Mapping[str, typing.Any],
-                        stacklevel: int = 2,
-                    ):
-                        super().__init__(
-                            cause_id=self._cause_id,
-                            params=params,
-                            stacklevel=(stacklevel + 1),
-                        )
-
-                cause = Cause(
-                    name=cause_name,
-                    fmt=fmt,
-                    params=params,
-                    exception=CauseException,
-                )
-                causes[cause_id] = cause
-
-                CauseException.__name__ = cause_name
-                CauseException.__qualname__ = cause_name
-                return CauseException
-
-        category = Category(name=category_name, exception=CategoryException, causes={})
-        cls._categories[category_id] = category
-
-        CategoryException.__name__ = category_name
-        CategoryException.__qualname__ = category_name
-        return CategoryException
+SqliteCachingException._register_category = __register_category
 
 
 SqliteCachingMetaException = SqliteCachingException.register_category(
