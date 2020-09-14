@@ -3,34 +3,76 @@ import typing
 
 log = logging.getLogger(__name__)
 
+Name = typing.NewType("Name", str)
+Format = typing.NewType("Format", str)
+CategoryID = typing.NewType("CategoryID", int)
+CauseID = typing.NewType("CauseID", int)
+
+ParamSet = typing.FrozenSet[str]
+ParamMap = typing.Mapping[str, typing.Any]
+
+NameStr = typing.Union[Name, str]
+FormatStr = typing.Union[Format, str]
+CategoryInt = typing.Union[CategoryID, int]
+CauseInt = typing.Union[CauseID, int]
+
 
 class Cause(typing.NamedTuple):
-    name: str
-    fmt: str
-    params: typing.FrozenSet[str]
+    name: Name
+    fmt: Format
+    params: ParamSet
     exception: typing.Type["SqliteCachingException"]
 
 
 class Category(typing.NamedTuple):
-    name: str
+    name: Name
     exception: typing.Type["SqliteCachingException"]
-    causes: typing.Dict[int, Cause]
+    causes: typing.Dict[CauseID, Cause]
 
 
 class SqliteCachingException(Exception):
-    _categories: typing.ClassVar[typing.Dict[int, Category]] = {}
+    _categories: typing.ClassVar[typing.Dict[CategoryID, Category]] = {}
     _raise_on_additional_params: typing.ClassVar[bool] = False
-    _register_category: typing.Callable[
-        [typing.Any, str, int],
-        typing.Type["SqliteCachingException"],
+    _register_category: typing.ClassVar[
+        typing.Callable[
+            [
+                typing.Any,
+                Name,
+                CategoryID,
+            ],
+            typing.Type["SqliteCachingException"],
+        ]
     ]
+    _register_cause: typing.ClassVar[
+        typing.Callable[
+            [
+                typing.Any,
+                Name,
+                CauseID,
+                Format,
+                ParamSet,
+            ],
+            typing.Type["SqliteCachingException"],
+        ]
+    ]
+
+    category_id: CategoryID
+    _category: Category
+
+    cause_id: CauseID
+    params: ParamMap
+    msg: str
+
+    _expected_params: ParamSet
+    _cause: Cause
+    _fmt: Format
 
     def __init__(
         self,
         *,
-        category_id: int,
-        cause_id: int,
-        params: typing.Mapping[str, typing.Any],
+        category_id: CategoryID,
+        cause_id: CauseID,
+        params: ParamMap,
         stacklevel: int,
     ):
         self.category_id = category_id
@@ -41,8 +83,8 @@ class SqliteCachingException(Exception):
             self._category = self._categories[category_id]
         except KeyError:
             raise SqliteCachingException(
-                category_id=0,
-                cause_id=0,
+                category_id=CategoryID(0),
+                cause_id=CauseID(0),
                 params={"category_id": category_id},
                 stacklevel=1,
             )
@@ -50,8 +92,8 @@ class SqliteCachingException(Exception):
             self._cause = self._category.causes[cause_id]
         except KeyError:
             raise SqliteCachingException(
-                category_id=0,
-                cause_id=2,
+                category_id=CategoryID(0),
+                cause_id=CauseID(2),
                 params={
                     "cause_id": cause_id,
                     "category_id": category_id,
@@ -67,8 +109,8 @@ class SqliteCachingException(Exception):
         if missing_params:
             log.error("expected parameters not provided: [%s]", missing_params)
             raise SqliteCachingException(
-                category_id=0,
-                cause_id=5,
+                category_id=CategoryID(0),
+                cause_id=CauseID(5),
                 params={
                     "category_id": category_id,
                     "category_name": self._category.name,
@@ -89,8 +131,8 @@ class SqliteCachingException(Exception):
             )
             if self._raise_on_additional_params:
                 raise SqliteCachingException(
-                    category_id=0,
-                    cause_id=6,
+                    category_id=CategoryID(0),
+                    cause_id=CauseID(6),
                     params={
                         "category_id": category_id,
                         "category_name": self._category.name,
@@ -119,7 +161,7 @@ class SqliteCachingException(Exception):
         cls,
         should_raise: typing.Optional[bool],
         /,
-    ):
+    ) -> bool:
         if should_raise is not None:
             log.warning(
                 "setting [%s]._raise_on_additional_params to [%s]",
@@ -130,16 +172,25 @@ class SqliteCachingException(Exception):
         return cls._raise_on_additional_params
 
     @classmethod
-    def register_category(cls, *, category_name: str, category_id: int):
-        return cls._register_category(cls, category_name, category_id)
+    def register_category(
+        cls,
+        *,
+        category_name: NameStr,
+        category_id: CategoryInt,
+    ):
+        return cls._register_category(
+            cls,
+            Name(category_name),
+            CategoryID(category_id),
+        )
 
 
 def __register_cause(
     cls,
-    cause_name: str,
-    cause_id: int,
-    fmt: str,
-    params: typing.FrozenSet[str],
+    cause_name: Name,
+    cause_id_: CauseID,
+    fmt: Format,
+    params: ParamSet,
     /,
 ):
     log.info(
@@ -147,29 +198,31 @@ def __register_cause(
         cause_name,
         cls._category_id,
         cls._category_name,
-        cause_id,
+        cause_id_,
     )
+    cause_name = Name(cause_name)
+    fmt = Format(fmt)
 
     category = cls._categories.get(cls._category_id, None)
     if not category:
         raise SqliteCachingException(
-            category_id=0,
-            cause_id=4,
+            category_id=CategoryID(0),
+            cause_id=CauseID(4),
             params={
                 "category_id": cls._category_id,
-                "cause_id": cause_id,
+                "cause_id": cause_id_,
                 "cause_name": cause_name,
             },
             stacklevel=1,
         )
     causes = category.causes
-    existing_cause = causes.get(cause_id, None)
+    existing_cause = causes.get(cause_id_, None)
     if existing_cause:
         raise SqliteCachingException(
-            category_id=0,
-            cause_id=3,
+            category_id=CategoryID(0),
+            cause_id=CauseID(3),
             params={
-                "cause_id": cause_id,
+                "cause_id": cause_id_,
                 "existing_cause_name": existing_cause.name,
                 "cause_name": cause_name,
             },
@@ -178,16 +231,8 @@ def __register_cause(
     category_exception: typing.Any = category.exception
 
     class CauseException(category_exception):
-        _cause_id: typing.ClassVar[int] = cause_id
+        _cause_id: typing.ClassVar[int] = cause_id_
         _cause_name: typing.ClassVar[str] = cause_name
-
-        cause_id_: int
-        params: typing.Mapping[str, typing.Any]
-        msg: str
-
-        _expected_params: typing.FrozenSet[str]
-        _cause: Cause
-        _fmt: str
 
         def __init__(
             self,
@@ -207,31 +252,37 @@ def __register_cause(
         params=params,
         exception=CauseException,
     )
-    causes[cause_id] = cause
+    causes[cause_id_] = cause
 
     CauseException.__name__ = cause_name
     CauseException.__qualname__ = cause_name
     return CauseException
 
 
-def __register_category(cls, category_name: str, category_id: int, /):
-    log.info("registering category [%s] with id [%d]", category_name, category_id)
-    existing_category = cls._categories.get(category_id, None)
+def __register_category(
+    cls,
+    category_name: Name,
+    category_id_: CategoryID,
+    /,
+):
+    log.info("registering category [%s] with id [%d]", category_name, category_id_)
+
+    existing_category = cls._categories.get(category_id_, None)
     if existing_category:
         log.error(
             (
                 "previously registered category with id [%d (%s)], cannot "
                 "overwrite with [%s]"
             ),
-            category_id,
+            category_id_,
             existing_category.name,
             category_name,
         )
         raise SqliteCachingException(
-            category_id=0,
-            cause_id=1,
+            category_id=CategoryID(0),
+            cause_id=CauseID(1),
             params={
-                "category_id": category_id,
+                "category_id": category_id_,
                 "existing_category_name": existing_category.name,
                 "category_name": category_name,
             },
@@ -239,21 +290,26 @@ def __register_category(cls, category_name: str, category_id: int, /):
         )
 
     class CategoryException(SqliteCachingException):
-        _category_id: typing.ClassVar[int] = category_id
+        _category_id: typing.ClassVar[CategoryID] = category_id_
         _category_name: typing.ClassVar[str] = category_name
-        _register_cause: typing.Callable[
-            [typing.Any, str, int, str, typing.FrozenSet[str]],
-            typing.Type[SqliteCachingException],
+        _register_cause: typing.ClassVar[
+            typing.Callable[
+                [
+                    typing.Any,
+                    Name,
+                    CauseID,
+                    Format,
+                    ParamSet,
+                ],
+                typing.Type[SqliteCachingException],
+            ]
         ]
-
-        category_id_: int
-        _category: Category
 
         def __init__(
             self,
             *,
-            cause_id: int,
-            params: typing.Mapping[str, typing.Any],
+            cause_id: CauseID,
+            params: ParamMap,
             stacklevel: int,
         ):
             super().__init__(
@@ -267,17 +323,23 @@ def __register_category(cls, category_name: str, category_id: int, /):
         def register_cause(
             cls,
             *,
-            cause_name: str,
-            cause_id: int,
-            fmt: str,
-            params: typing.FrozenSet[str],
+            cause_name: NameStr,
+            cause_id: CauseInt,
+            fmt: FormatStr,
+            params: ParamSet,
         ):
-            return cls._register_cause(cls, cause_name, cause_id, fmt, params)
+            return cls._register_cause(
+                cls,
+                Name(cause_name),
+                CauseID(cause_id),
+                Format(fmt),
+                params,
+            )
 
     CategoryException._register_cause = __register_cause
 
     category = Category(name=category_name, exception=CategoryException, causes={})
-    cls._categories[category_id] = category
+    cls._categories[category_id_] = category
 
     CategoryException.__name__ = category_name
     CategoryException.__qualname__ = category_name
