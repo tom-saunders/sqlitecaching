@@ -6,4 +6,4 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 log.addHandler(logging.NullHandler())
 
-config = Config(logger=log)
+conf = Config(logger=log)

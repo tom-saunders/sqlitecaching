@@ -6,7 +6,7 @@ from sqlitecaching.enums import LogLevel
 log = logging.getLogger(__name__)
 
 
-class UTCFormatter(logging.Formatter):
+class UTCFormatter(logging.Formatter):  # pragma: no cover
     def __init__(self, *, fmt=None, datefmt=None):
         if not fmt:
             fmt = (
@@ -61,7 +61,7 @@ class Config:
             log_level = self.log_output[1]
 
             if self.logger_level > log_level:
-                log.warn(
+                log.warning(
                     (
                         "configuring log_handler at level %s for logger %s "
                         "which has logger_level: %s which will not log "
@@ -88,7 +88,7 @@ class Config:
             debug_level = self.debug_output[1]
 
             if self.logger_level > debug_level:
-                log.warn(
+                log.warning(
                     (
                         "configuring debug_handler at level %s for logger %s "
                         "which has logger_level: %s which will not log "
