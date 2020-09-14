@@ -156,7 +156,7 @@ jobs:
                         command: |
                             pipenv run flake8 \
                                 --extend-exclude .venv/ \
-                                --select T100,T101,T102,T103 \
+                                --config ~/circleci-sqlitecache/.flake8.todo \
                                 --tee \
                                 --output ~/circleci-sqlitecache/test-results/fixme/flake8-fixme.txt \
                                 ~/circleci-sqlitecache/ \

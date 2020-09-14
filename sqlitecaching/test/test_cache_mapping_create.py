@@ -20,7 +20,11 @@ from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 log = logging.getLogger(__name__)
 
 # if this isn't defined here then the listcomps inside the class fail
-Def = namedtuple("Def", ["name", "mapping", "expected", "meta"], defaults=[None])
+Def = namedtuple(
+    "Def",
+    ["name", "mapping", "expected", "meta"],
+    defaults=[None],
+)
 
 
 @test_level(TestLevel.PRE_COMMIT)
@@ -30,7 +34,10 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         self.res_dir += "mappings/"
 
     In = CacheDictMappingTuple
-    InputDef = namedtuple("InputDef", ["result", "mapping"])
+    InputDef = namedtuple(
+        "InputDef",
+        ["result", "mapping"],
+    )
 
     statement_types = [
         "create_statement",
@@ -49,9 +56,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             result="aA__to__",
             mapping=In(
                 table="aa",
-                keys={
-                    "a": "A",
-                },
+                keys={"a": "A"},
                 values={},
             ),
         ),
@@ -59,22 +64,15 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             result="aA__to__bB",
             mapping=In(
                 table="aa__bb",
-                keys={
-                    "a": "A",
-                },
-                values={
-                    "b": "B",
-                },
+                keys={"a": "A"},
+                values={"b": "B"},
             ),
         ),
         InputDef(
             result="aA_bB__to__",
             mapping=In(
                 table="aa_bb",
-                keys={
-                    "a": "A",
-                    "b": "B",
-                },
+                keys={"a": "A", "b": "B"},
                 values={},
             ),
         ),
@@ -82,10 +80,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             result="aA_bB__to__",
             mapping=In(
                 table="aA_bB",
-                keys={
-                    "a": "a",
-                    "b": "b",
-                },
+                keys={"a": "a", "b": "b"},
                 values={},
             ),
         ),
@@ -93,13 +88,8 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             result="aA_bB__to__cC",
             mapping=In(
                 table="aa_bb__cc",
-                keys={
-                    "a": "a",
-                    "b": "b",
-                },
-                values={
-                    "c": "C",
-                },
+                keys={"a": "a", "b": "b"},
+                values={"c": "C"},
             ),
         ),
         InputDef(
@@ -120,7 +110,10 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         ),
     ]
 
-    FailRes = namedtuple("FailRes", ["name", "exception"])
+    FailRes = namedtuple(
+        "FailRes",
+        ["name", "exception"],
+    )
     fail_mapping_definitions = [
         InputDef(
             result=FailRes(

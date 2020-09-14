@@ -1,0 +1,2 @@
+[flake8]
+select = T100, T101, T102, T103

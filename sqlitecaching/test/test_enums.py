@@ -1,3 +1,4 @@
+import enum
 import logging
 import typing
 
@@ -15,13 +16,13 @@ from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 log = logging.getLogger(__name__)
 
 
-class Cmp(typing.NamedTuple):
-    lt: bool
-    le: bool
-    gt: bool
-    ge: bool
-    eq: bool
-    ne: bool
+class Cmp(enum.Flag):
+    lt = enum.auto()
+    le = enum.auto()
+    gt = enum.auto()
+    ge = enum.auto()
+    eq = enum.auto()
+    ne = enum.auto()
 
 
 class Def(typing.NamedTuple):
@@ -48,105 +49,49 @@ class TestSqliteCachingEnums(SqliteCachingTestBase):
             "ab_a__ab_a",
             TestEnumAB.A,
             TestEnumAB.A,
-            Cmp(
-                lt=False,
-                le=True,
-                gt=False,
-                ge=True,
-                eq=True,
-                ne=False,
-            ),
+            Cmp.le | Cmp.ge | Cmp.eq,
         ),
         Def(
             "ab_a__ab_b",
             TestEnumAB.A,
             TestEnumAB.B,
-            Cmp(
-                lt=True,
-                le=True,
-                gt=False,
-                ge=False,
-                eq=False,
-                ne=True,
-            ),
+            Cmp.lt | Cmp.le | Cmp.ne,
         ),
         Def(
             "ab_b__ab_a",
             TestEnumAB.B,
             TestEnumAB.A,
-            Cmp(
-                lt=False,
-                le=False,
-                gt=True,
-                ge=True,
-                eq=False,
-                ne=True,
-            ),
+            Cmp.gt | Cmp.ge | Cmp.ne,
         ),
         Def(
             "ab_b__ab_b",
             TestEnumAB.B,
             TestEnumAB.B,
-            Cmp(
-                lt=False,
-                le=True,
-                gt=False,
-                ge=True,
-                eq=True,
-                ne=False,
-            ),
+            Cmp.le | Cmp.ge | Cmp.eq,
         ),
         Def(
             "ba_a__ba_a",
             TestEnumBA.A,
             TestEnumBA.A,
-            Cmp(
-                lt=False,
-                le=True,
-                gt=False,
-                ge=True,
-                eq=True,
-                ne=False,
-            ),
+            Cmp.le | Cmp.ge | Cmp.eq,
         ),
         Def(
             "ba_a__ba_b",
             TestEnumBA.A,
             TestEnumBA.B,
-            Cmp(
-                lt=False,
-                le=False,
-                gt=True,
-                ge=True,
-                eq=False,
-                ne=True,
-            ),
+            Cmp.gt | Cmp.ge | Cmp.ne,
         ),
         Def(
             "ba_b__ba_a",
             TestEnumBA.B,
             TestEnumBA.A,
-            Cmp(
-                lt=True,
-                le=True,
-                gt=False,
-                ge=False,
-                eq=False,
-                ne=True,
-            ),
+            Cmp.lt | Cmp.le | Cmp.ne,
         ),
         Def(
             "ba_b__ba_b",
             TestEnumBA.B,
             TestEnumBA.B,
-            Cmp(
-                lt=False,
-                le=True,
-                gt=False,
-                ge=True,
-                eq=True,
-                ne=False,
-            ),
+            Cmp.le | Cmp.ge | Cmp.eq,
         ),
     ]
     fail_params = [
@@ -181,32 +126,32 @@ class TestSqliteCachingEnums(SqliteCachingTestBase):
     @parameterized.parameterized.expand(success_params)
     def test_lt_success(self, name, left, right, expected):
         actual = left < right
-        self.assertEqual(actual, expected.lt)
+        self.assertEqual(actual, Cmp.lt == (expected & Cmp.lt))
 
     @parameterized.parameterized.expand(success_params)
     def test_le_success(self, name, left, right, expected):
         actual = left <= right
-        self.assertEqual(actual, expected.le)
+        self.assertEqual(actual, Cmp.le == (expected & Cmp.le))
 
     @parameterized.parameterized.expand(success_params)
     def test_gt_success(self, name, left, right, expected):
         actual = left > right
-        self.assertEqual(actual, expected.gt)
+        self.assertEqual(actual, Cmp.gt == (expected & Cmp.gt))
 
     @parameterized.parameterized.expand(success_params)
     def test_ge_success(self, name, left, right, expected):
         actual = left >= right
-        self.assertEqual(actual, expected.ge)
+        self.assertEqual(actual, Cmp.ge == (expected & Cmp.ge))
 
     @parameterized.parameterized.expand(success_params)
     def test_eq_success(self, name, left, right, expected):
         actual = left == right
-        self.assertEqual(actual, expected.eq)
+        self.assertEqual(actual, Cmp.eq == (expected & Cmp.eq))
 
     @parameterized.parameterized.expand(success_params)
     def test_ne_success(self, name, left, right, expected):
         actual = left != right
-        self.assertEqual(actual, expected.ne)
+        self.assertEqual(actual, Cmp.ne == (expected & Cmp.ne))
 
     @parameterized.parameterized.expand(fail_params)
     def test_lt_fail(self, name, left, right, _):
