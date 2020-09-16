@@ -1,6 +1,6 @@
 import itertools
 import logging
-from collections import namedtuple
+import typing
 
 import parameterized
 
@@ -15,18 +15,39 @@ from sqlitecaching.dict.mapping import (
     CacheDictMappingMissingKeysException,
     CacheDictMappingNoIdentifierProvidedException,
     CacheDictMappingReservedTableException,
-    CacheDictMappingTuple,
 )
+from sqlitecaching.exceptions import SqliteCachingException
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
 
-# if this isn't defined here then the listcomps inside the class fail
-Def = namedtuple(
-    "Def",
-    ["name", "mapping", "expected", "meta"],
-    defaults=[None],
-)
+
+class In(typing.NamedTuple):
+    table: typing.Optional[str]
+    keys: typing.Mapping[typing.Optional[str], typing.Optional[str]]
+    values: typing.Mapping[typing.Optional[str], typing.Optional[str]]
+
+
+class Def(typing.NamedTuple):
+    name: str
+    mapping: In
+    expected: typing.Any
+    meta: typing.Optional[typing.Any] = None
+
+
+class FailRes(typing.NamedTuple):
+    name: str
+    exception: typing.Type[SqliteCachingException]
+
+
+class InputDef(typing.NamedTuple):
+    result: str
+    mapping: In
+
+
+class FailInputDef(typing.NamedTuple):
+    result: FailRes
+    mapping: In
 
 
 @test_level(TestLevel.PRE_COMMIT)
@@ -34,12 +55,6 @@ class TestCacheDictMapping(SqliteCachingTestBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.res_dir += "mappings/"
-
-    In = CacheDictMappingTuple
-    InputDef = namedtuple(
-        "InputDef",
-        ["result", "mapping"],
-    )
 
     statement_types = [
         "create_statement",
@@ -160,12 +175,8 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         ),
     ]
 
-    FailRes = namedtuple(
-        "FailRes",
-        ["name", "exception"],
-    )
     fail_mapping_definitions = [
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="blank_table_name",
                 exception=CacheDictMappingNoIdentifierProvidedException,
@@ -176,7 +187,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="none_table_name",
                 exception=CacheDictMappingNoIdentifierProvidedException,
@@ -187,7 +198,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="space_table_name",
                 exception=CacheDictMappingInvalidIdentifierException,
@@ -198,7 +209,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="invalid_table_name",
                 exception=CacheDictMappingInvalidIdentifierException,
@@ -209,7 +220,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="reserved_table_name",
                 exception=CacheDictMappingReservedTableException,
@@ -220,7 +231,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="missing_keys",
                 exception=CacheDictMappingMissingKeysException,
@@ -231,7 +242,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="overlapping_key_ands_values",
                 exception=CacheDictMappingKeyValOverlapException,
@@ -242,7 +253,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"a": "A", "b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="blank_key_name",
                 exception=CacheDictMappingNoIdentifierProvidedException,
@@ -253,7 +264,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="none_key_name",
                 exception=CacheDictMappingNoIdentifierProvidedException,
@@ -264,7 +275,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="space_key_name",
                 exception=CacheDictMappingInvalidIdentifierException,
@@ -275,7 +286,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="invalid_key_name",
                 exception=CacheDictMappingInvalidIdentifierException,
@@ -286,7 +297,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="duplicated_key_name",
                 exception=CacheDictMappingDuplicateKeysException,
@@ -297,7 +308,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="duplicated_key_name2",
                 exception=CacheDictMappingDuplicateKeysException,
@@ -308,7 +319,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="duplicated_value_name",
                 exception=CacheDictMappingDuplicateValuesException,
@@ -319,7 +330,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B", "B": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="duplicated_value_name2",
                 exception=CacheDictMappingDuplicateValuesException,
@@ -330,7 +341,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B", "b ": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="invalid_key_sqltype",
                 exception=CacheDictMappingInvalidSQLTypeException,
@@ -341,7 +352,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 values={"b": "B"},
             ),
         ),
-        InputDef(
+        FailInputDef(
             result=FailRes(
                 name="invalid_value_sqltype",
                 exception=CacheDictMappingInvalidSQLTypeException,

@@ -3,13 +3,10 @@ import logging
 import re
 import sqlite3
 import typing
-from collections import namedtuple
 
 from sqlitecaching.exceptions import SqliteCachingException
 
 log = logging.getLogger(__name__)
-
-CacheDictMappingTuple = namedtuple("CacheDictMappingTuple", ["table", "keys", "values"])
 
 
 CacheDictMappingException = SqliteCachingException.register_category(
@@ -78,6 +75,8 @@ ValidSqlType = typing.NewType("ValidSqlType", str)
 
 SqlStatement = typing.NewType("SqlStatement", str)
 
+ColMapping = typing.Mapping[ValidIdent, ValidSqlType]
+
 
 class IdentClash(typing.NamedTuple):
     original: Ident
@@ -90,6 +89,9 @@ class ColInfo(typing.NamedTuple):
 
 
 class CacheDictMapping:
+    table_ident: ValidIdent
+    keys: ColMapping
+    values: ColMapping
 
     _create_statement: typing.Optional[SqlStatement]
     _clear_statement: typing.Optional[SqlStatement]
@@ -116,7 +118,7 @@ class CacheDictMapping:
             values = {}
 
         validated_table = self._validate_identifier(identifier=table)
-        if validated_table.startswith("sqlite_"):
+        if validated_table.startswith("'sqlite_"):
             raise CacheDictMappingReservedTableException(
                 params={"table_name": validated_table},
             )
@@ -223,19 +225,17 @@ class CacheDictMapping:
             ex.__cause__ = to_raise
             to_raise = ex
 
+        # TODO add some testing around the handling of multierrors...
         if to_raise:
             raise to_raise
 
-        self.Keys = namedtuple("Keys", sorted(key_columns.keys()))  # type: ignore
-        self.Values = namedtuple("Values", sorted(value_columns.keys()))  # type: ignore
-
-        self.key_info = self.Keys(**key_columns)
-        self.value_info = self.Values(**value_columns)
-        self.mapping_tuple = CacheDictMappingTuple(
-            table=validated_table,
-            keys=self.key_info,
-            values=self.value_info,
-        )
+        self.table_ident = validated_table
+        self.keys = {
+            ident: col_info.sqltype for (ident, col_info) in key_columns.items()
+        }
+        self.values = {
+            ident: col_info.sqltype for (ident, col_info) in value_columns.items()
+        }
 
         self._create_statement = None
         self._clear_statement = None
@@ -270,18 +270,14 @@ class CacheDictMapping:
         if self._create_statement:
             return self._create_statement
 
-        table_identifier = f"'{self.mapping_tuple.table}'"
+        key_columns = sorted(self.keys.keys())
 
-        keys = self.mapping_tuple.keys
-        key_columns = sorted(keys._fields)
-
-        values = self.mapping_tuple.values
-        value_columns = sorted(values._fields)
+        value_columns = sorted(self.values.keys())
 
         # fmt: off
         key_column_definitions = ", -- primary key\n    ".join(
             [
-                f"'{column}' {getattr(keys, column).sqltype}"
+                f"{column} {self.keys[column]}"
                 for column in key_columns
             ],
         )
@@ -290,7 +286,7 @@ class CacheDictMapping:
         if value_columns:
             value_column_definitions = ", -- value\n    ".join(
                 [
-                    f"'{column}' {getattr(values, column).sqltype}"
+                    f"{column} {self.values[column]}"
                     for column in value_columns
                 ],
             )
@@ -299,15 +295,13 @@ class CacheDictMapping:
             value_column_definitions = "-- no values defined"
         # fmt: on
 
-        primary_key_columns = "'"
-        primary_key_columns += "',\n        '".join(key_columns)
-        primary_key_columns += "'"
+        primary_key_columns = ",\n        ".join(key_columns)
         primary_key_definition = self._PRIMARY_KEY_FMT.format(
             primary_key_columns=primary_key_columns,
         )
 
         unstripped_create_statement = self._CREATE_FMT.format(
-            table_identifier=table_identifier,
+            table_identifier=self.table_ident,
             key_column_definitions=key_column_definitions,
             value_column_definitions=value_column_definitions,
             primary_key_definition=primary_key_definition,
@@ -333,10 +327,8 @@ class CacheDictMapping:
         if self._clear_statement:
             return self._clear_statement
 
-        table_identifier = f"'{self.mapping_tuple.table}'"
-
         unstripped_clear_statement = self._CLEAR_FMT.format(
-            table_identifier=table_identifier,
+            table_identifier=self.table_ident,
         )
 
         clear_lines = []
@@ -359,10 +351,8 @@ class CacheDictMapping:
         if self._delete_statement:
             return self._delete_statement
 
-        table_identifier = f"'{self.mapping_tuple.table}'"
-
         unstripped_delete_statement = self._DELETE_FMT.format(
-            table_identifier=table_identifier,
+            table_identifier=self.table_ident,
         )
 
         delete_lines = []
@@ -405,29 +395,22 @@ class CacheDictMapping:
         if self._upsert_statement:
             return self._upsert_statement
 
-        table_identifier = f"'{self.mapping_tuple.table}'"
+        key_column_names = sorted(self.keys.keys())
 
-        keys = self.mapping_tuple.keys
-        key_column_names = sorted(keys._fields)
+        value_column_names = sorted(self.values.keys())
 
-        values = self.mapping_tuple.values
-        value_column_names = sorted(values._fields)
-
-        key_columns = "'"
-        key_columns += "', -- key\n    '".join(key_column_names)
-        key_columns += "'"
+        key_columns = ", -- key\n    ".join(key_column_names)
         all_columns = key_columns
         key_columns += " -- key"
 
         if value_column_names:
             all_columns += ", -- key\n    "
-            value_columns = "'"
-            value_columns += "', -- value\n    '".join(value_column_names)
-            value_columns += "' -- value"
+            value_columns = ", -- value\n    ".join(value_column_names)
+            value_columns += " -- value"
             all_columns += value_columns
 
             value_values = ", -- value\n    ".join(
-                [f"excluded.'{c}'" for c in value_column_names],
+                [f"excluded.{c}" for c in value_column_names],
             )
             value_values += " -- value"
 
@@ -446,7 +429,7 @@ class CacheDictMapping:
             ["?" for _ in range(0, len(key_column_names) + len(value_column_names))],
         )
         unstripped_upsert_statement = self._UPSERT_FMT.format(
-            table_identifier=table_identifier,
+            table_identifier=self.table_ident,
             all_columns=all_columns,
             all_values=all_values,
             upsert_stmt=upsert_stmt,
@@ -479,18 +462,14 @@ class CacheDictMapping:
         if self._remove_statement:
             return self._remove_statement
 
-        table_identifier = f"'{self.mapping_tuple.table}'"
-
-        keys = self.mapping_tuple.keys
-        key_column_names = sorted(keys._fields)
-        key_columns = "'"
-        key_columns += "', -- key\n    '".join(key_column_names)
-        key_columns += "' -- key"
+        key_column_names = sorted(self.keys.keys())
+        key_columns = ", -- key\n    ".join(key_column_names)
+        key_columns += " -- key"
 
         key_columns_count = len(key_column_names)
         key_values = ",\n    ".join(["?" for _ in range(0, key_columns_count)])
         unstripped_remove_statement = self._REMOVE_FMT.format(
-            table_identifier=table_identifier,
+            table_identifier=self.table_ident,
             key_columns=key_columns,
             key_values=key_values,
         )
@@ -515,10 +494,8 @@ class CacheDictMapping:
         if self._length_statement:
             return self._length_statement
 
-        table_identifier = f"'{self.mapping_tuple.table}'"
-
         unstripped_length_statement = self._LENGTH_FMT.format(
-            table_identifier=table_identifier,
+            table_identifier=self.table_ident,
         )
 
         length_lines = []
@@ -543,17 +520,13 @@ class CacheDictMapping:
         if self._keys_statement:
             return self._keys_statement
 
-        table_identifier = f"'{self.mapping_tuple.table}'"
-
-        keys = self.mapping_tuple.keys
-        key_column_names = sorted(keys._fields)
-        key_columns = "'"
-        key_columns += "', -- key\n    '".join(key_column_names)
-        key_columns += "' -- key"
+        key_column_names = sorted(self.keys.keys())
+        key_columns = ", -- key\n    ".join(key_column_names)
+        key_columns += " -- key"
 
         unstripped_keys_statement = self._KEYS_FMT.format(
             key_columns=key_columns,
-            table_identifier=table_identifier,
+            table_identifier=self.table_ident,
         )
 
         keys_lines = []
@@ -579,25 +552,20 @@ class CacheDictMapping:
         if self._items_statement:
             return self._items_statement
 
-        table_identifier = f"'{self.mapping_tuple.table}'"
+        key_column_names = sorted(self.keys.keys())
+        all_columns = ", -- key\n    ".join(key_column_names)
 
-        keys = self.mapping_tuple.keys
-        key_column_names = sorted(keys._fields)
-        all_columns = "'"
-        all_columns += "', -- key\n    '".join(key_column_names)
-
-        values = self.mapping_tuple.values
-        value_column_names = sorted(values._fields)
+        value_column_names = sorted(self.values.keys())
         if value_column_names:
-            all_columns += "', -- key\n    '"
-            all_columns += "', -- value\n    '".join(value_column_names)
-            all_columns += "' -- value"
+            all_columns += ", -- key\n    "
+            all_columns += ", -- value\n    ".join(value_column_names)
+            all_columns += " -- value"
         else:
-            all_columns += "' -- key"
+            all_columns += " -- key"
 
         unstripped_items_statement = self._ITEMS_FMT.format(
             all_columns=all_columns,
-            table_identifier=table_identifier,
+            table_identifier=self.table_ident,
         )
 
         items_lines = []
@@ -622,20 +590,16 @@ class CacheDictMapping:
         if self._values_statement:
             return self._values_statement
 
-        table_identifier = f"'{self.mapping_tuple.table}'"
-
-        values = self.mapping_tuple.values
-        value_column_names = sorted(values._fields)
+        value_column_names = sorted(self.values.keys())
         if value_column_names:
-            value_columns = "'"
-            value_columns += "', -- value\n    '".join(value_column_names)
-            value_columns += "' -- value"
+            value_columns = ", -- value\n    ".join(value_column_names)
+            value_columns += " -- value"
         else:
             value_columns = "null -- null value to permit querying"
 
         unstripped_values_statement = self._VALUES_FMT.format(
             value_columns=value_columns,
-            table_identifier=table_identifier,
+            table_identifier=self.table_ident,
         )
 
         values_lines = []
@@ -714,7 +678,7 @@ class CacheDictMapping:
                 lower_identifier,
             )
 
-        return ValidIdent(lower_identifier)
+        return ValidIdent(f"'{lower_identifier}'")
 
     @classmethod
     def _validate_sqltype(cls, *, sqltype: typing.Optional[SqlType]) -> ValidSqlType:
