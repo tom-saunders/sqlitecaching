@@ -7,6 +7,6 @@ INSERT INTO 'aa'
 ) VALUES (
     -- all values
     ?
-) DO NOTHING
+) ON CONFLICT DO NOTHING
 -- no conflict action as no values defined
 ;

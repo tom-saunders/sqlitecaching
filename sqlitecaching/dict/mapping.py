@@ -51,20 +51,23 @@ CacheDictMappingNoIdentifierProvidedException = __CDME.register_cause(
     fmt="The identifier provided: [%s] does not have a value.",
     params=frozenset(["identifier"]),
 )
-CacheDictMappingDuplicateKeyNameException = __CDME.register_cause(
-    cause_name=f"{__name__}.DuplicateKeyNameException",
+CacheDictMappingDuplicateKeysException = __CDME.register_cause(
+    cause_name=f"{__name__}.DuplicateKeysException",
     cause_id=5,
-    fmt=(
-        "The key column identifier provided: [%s] has already been added (as "
-        "[%s], after casefold())"
-    ),
-    params=frozenset(["identifier", "validated_identifier"]),
+    fmt="Duplicate key column identifiers provided: [%s]",
+    params=frozenset(["dups"]),
 )
 CacheDictMappingInvalidSQLTypeException = __CDME.register_cause(
     cause_name=f"{__name__}.InvalidSQLTypeException",
     cause_id=6,
     fmt="sqltype provided: [%s] does not match requirements [%s]",
     params=frozenset(["sqltype", "re"]),
+)
+CacheDictMappingDuplicateValuesException = __CDME.register_cause(
+    cause_name=f"{__name__}.DuplicateValuesException",
+    cause_id=7,
+    fmt="Duplicate value column identifiers provided: [%s]",
+    params=frozenset(["dups"]),
 )
 
 Ident = typing.NewType("Ident", str)
@@ -74,6 +77,11 @@ ValidIdent = typing.NewType("ValidIdent", str)
 ValidSqlType = typing.NewType("ValidSqlType", str)
 
 SqlStatement = typing.NewType("SqlStatement", str)
+
+
+class IdentClash(typing.NamedTuple):
+    original: Ident
+    clashes: typing.FrozenSet[Ident]
 
 
 class CacheDictMapping:
@@ -109,39 +117,119 @@ class CacheDictMapping:
             )
 
         key_columns: typing.Dict[ValidIdent, ValidSqlType] = collections.OrderedDict()
+        key_column_names: typing.Dict[ValidIdent, Ident] = collections.OrderedDict()
         value_columns: typing.Dict[ValidIdent, ValidSqlType] = collections.OrderedDict()
-        keyval_columns: typing.FrozenSet = frozenset()
+        value_column_names: typing.Dict[ValidIdent, Ident] = collections.OrderedDict()
+
+        dup_key_columns: typing.Dict[ValidIdent, IdentClash] = {}
+        keyval_columns: typing.Dict[ValidIdent, IdentClash] = {}
+        dup_value_columns: typing.Dict[ValidIdent, IdentClash] = {}
 
         unset_value = object()
         for (name, sqltype) in keys.items():
             validated_name = self._validate_identifier(identifier=name)
             in_keys = key_columns.get(validated_name, unset_value)
             if in_keys is not unset_value:
-                raise CacheDictMappingDuplicateKeyNameException(
-                    params={"identifier": name, "validated_identifier": validated_name},
+                original_name = key_column_names.get(validated_name)
+                if not original_name:
+                    raise Exception()
+                dup_cols = dup_key_columns.get(
+                    validated_name,
+                    IdentClash(original_name, frozenset()),
+                )
+                dup_key_columns[validated_name] = IdentClash(
+                    dup_cols.original,
+                    dup_cols.clashes | frozenset([name]),
                 )
             else:
                 self._handle_column(
                     column_dict=key_columns,
                     validated_name=validated_name,
                     sqltype=sqltype,
+                    names_dict=key_column_names,
+                    original_name=name,
                 )
 
         for (name, sqltype) in values.items():
             validated_name = self._validate_identifier(identifier=name)
             in_keys = key_columns.get(validated_name, unset_value)
+            in_values = value_columns.get(validated_name, unset_value)
             if in_keys is not unset_value:
-                keyval_columns = keyval_columns | frozenset([validated_name])
+                original = key_column_names.get(validated_name)
+                if not original:
+                    raise Exception()
+                keyval_cols = keyval_columns.get(
+                    validated_name,
+                    IdentClash(original, frozenset()),
+                )
+                keyval_columns[validated_name] = IdentClash(
+                    keyval_cols.original,
+                    keyval_cols.clashes | frozenset([name]),
+                )
+            elif in_values is not unset_value:
+                original = value_column_names.get(validated_name)
+                if not original:
+                    raise Exception()
+                dup_cols = dup_value_columns.get(
+                    validated_name,
+                    IdentClash(original, frozenset()),
+                )
+                dup_value_columns[validated_name] = IdentClash(
+                    dup_cols.original,
+                    dup_cols.clashes | frozenset([name]),
+                )
             else:
                 self._handle_column(
                     column_dict=value_columns,
                     validated_name=validated_name,
                     sqltype=sqltype,
+                    names_dict=value_column_names,
+                    original_name=name,
                 )
+
+        # This is somewhat abusing the exception handling process...
+        # Note we're treating exceptions as a stack so doing this in the
+        # reversed order
+        to_raise = None
+
+        if dup_value_columns:
+            val_strs: typing.List[str] = []
+            for (key, val) in dup_value_columns.items():
+                dup_idents = "', '".join(val.clashes)
+                val_str = (
+                    f"column [{key}] (input [{val.original}]) clashes with "
+                    f"['{dup_idents}']"
+                )
+                val_strs.append(val_str)
+            dup_val_str = ", ".join(val_strs)
+            to_raise = CacheDictMappingDuplicateValuesException(
+                params={"dups": dup_val_str},
+            )
 
         if keyval_columns:
             keyval_str = "'" + "', '".join(keyval_columns) + "'"
-            raise CacheDictMappingKeyValOverlapException(params={"columns": keyval_str})
+            ex = CacheDictMappingKeyValOverlapException(params={"columns": keyval_str})
+            ex.__cause__ = to_raise
+            to_raise = ex
+
+        if dup_key_columns:
+            key_strs: typing.List[str] = []
+            for (key, val) in dup_key_columns.items():
+                dup_idents = "', '".join(val.clashes)
+                key_str = (
+                    f"column [{key}] (input [{val.original}]) clashes with "
+                    f"['{dup_idents}']"
+                )
+                key_strs.append(key_str)
+            dup_key_str = ", ".join(key_strs)
+            ex = CacheDictMappingDuplicateKeysException(
+                params={"dups": dup_key_str},
+            )
+            ex.__cause__ = to_raise
+            to_raise = ex
+
+        if to_raise:
+            raise to_raise
 
         self.Keys = namedtuple("Keys", sorted(key_columns.keys()))  # type: ignore
         self.Values = namedtuple("Values", sorted(value_columns.keys()))  # type: ignore
@@ -301,11 +389,11 @@ class CacheDictMapping:
         ") VALUES (\n"
         "    -- all values\n"
         "    {all_values}\n"
-        "){upsert_stmt}\n"
+        ") ON CONFLICT {upsert_stmt}\n"
         ";\n"
     )
     _UPSERT_STMT_FMT = (
-        " ON CONFLICT (\n"
+        "(\n"
         "    -- key columns\n"
         "    {key_columns}\n"
         ") DO UPDATE SET (\n"
@@ -356,7 +444,7 @@ class CacheDictMapping:
         else:
             all_columns += " -- key\n    "
             all_columns += "-- no values defined"
-            upsert_stmt = " DO NOTHING\n"
+            upsert_stmt = "DO NOTHING\n"
             upsert_stmt += "-- no conflict action as no values defined"
 
         all_values = ",\n    ".join(
@@ -571,9 +659,12 @@ class CacheDictMapping:
         column_dict: typing.Dict[ValidIdent, ValidSqlType],
         validated_name: ValidIdent,
         sqltype: typing.Optional[SqlType],
+        names_dict: typing.Dict[ValidIdent, Ident],
+        original_name: Ident,
     ) -> None:
         validated_sqltype = cls._validate_sqltype(sqltype=sqltype)
         column_dict[validated_name] = validated_sqltype
+        names_dict[validated_name] = original_name
 
     # fmt: off
     _IDENTIFIER_RE_DEFN = (
