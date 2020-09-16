@@ -84,6 +84,11 @@ class IdentClash(typing.NamedTuple):
     clashes: typing.FrozenSet[Ident]
 
 
+class ColInfo(typing.NamedTuple):
+    original: Ident
+    sqltype: ValidSqlType
+
+
 class CacheDictMapping:
 
     _create_statement: typing.Optional[SqlStatement]
@@ -106,7 +111,7 @@ class CacheDictMapping:
         if not keys:
             raise CacheDictMappingMissingKeysException(params={"no_keys": keys})
 
-        if values is None:
+        if not values:
             log.info("providing empty dict for values")
             values = {}
 
@@ -116,38 +121,33 @@ class CacheDictMapping:
                 params={"table_name": validated_table},
             )
 
-        key_columns: typing.Dict[ValidIdent, ValidSqlType] = collections.OrderedDict()
-        key_column_names: typing.Dict[ValidIdent, Ident] = collections.OrderedDict()
-        value_columns: typing.Dict[ValidIdent, ValidSqlType] = collections.OrderedDict()
-        value_column_names: typing.Dict[ValidIdent, Ident] = collections.OrderedDict()
+        key_columns: typing.Dict[ValidIdent, ColInfo] = collections.OrderedDict()
+        value_columns: typing.Dict[ValidIdent, ColInfo] = collections.OrderedDict()
 
         dup_key_columns: typing.Dict[ValidIdent, IdentClash] = {}
         keyval_columns: typing.Dict[ValidIdent, IdentClash] = {}
         dup_value_columns: typing.Dict[ValidIdent, IdentClash] = {}
 
-        unset_value = object()
+        unset_value = ColInfo(Ident("PLACE.HOLDER"), ValidSqlType("PLACE.HOLDER"))
         for (name, sqltype) in keys.items():
             validated_name = self._validate_identifier(identifier=name)
             in_keys = key_columns.get(validated_name, unset_value)
             if in_keys is not unset_value:
-                original_name = key_column_names.get(validated_name)
-                if not original_name:
-                    raise Exception()
+                original_name = in_keys.original
                 dup_cols = dup_key_columns.get(
                     validated_name,
                     IdentClash(original_name, frozenset()),
                 )
                 dup_key_columns[validated_name] = IdentClash(
-                    dup_cols.original,
+                    original_name,
                     dup_cols.clashes | frozenset([name]),
                 )
             else:
                 self._handle_column(
                     column_dict=key_columns,
+                    original_name=name,
                     validated_name=validated_name,
                     sqltype=sqltype,
-                    names_dict=key_column_names,
-                    original_name=name,
                 )
 
         for (name, sqltype) in values.items():
@@ -155,36 +155,31 @@ class CacheDictMapping:
             in_keys = key_columns.get(validated_name, unset_value)
             in_values = value_columns.get(validated_name, unset_value)
             if in_keys is not unset_value:
-                original = key_column_names.get(validated_name)
-                if not original:
-                    raise Exception()
+                original_name = in_keys.original
                 keyval_cols = keyval_columns.get(
                     validated_name,
-                    IdentClash(original, frozenset()),
+                    IdentClash(original_name, frozenset()),
                 )
                 keyval_columns[validated_name] = IdentClash(
-                    keyval_cols.original,
+                    original_name,
                     keyval_cols.clashes | frozenset([name]),
                 )
             elif in_values is not unset_value:
-                original = value_column_names.get(validated_name)
-                if not original:
-                    raise Exception()
-                dup_cols = dup_value_columns.get(
+                original_name = in_values.original
+                val_cols = dup_value_columns.get(
                     validated_name,
-                    IdentClash(original, frozenset()),
+                    IdentClash(original_name, frozenset()),
                 )
                 dup_value_columns[validated_name] = IdentClash(
-                    dup_cols.original,
-                    dup_cols.clashes | frozenset([name]),
+                    original_name,
+                    val_cols.clashes | frozenset([name]),
                 )
             else:
                 self._handle_column(
                     column_dict=value_columns,
+                    original_name=name,
                     validated_name=validated_name,
                     sqltype=sqltype,
-                    names_dict=value_column_names,
-                    original_name=name,
                 )
 
         # This is somewhat abusing the exception handling process...
@@ -286,7 +281,7 @@ class CacheDictMapping:
         # fmt: off
         key_column_definitions = ", -- primary key\n    ".join(
             [
-                f"'{column}' {getattr(keys, column)}"
+                f"'{column}' {getattr(keys, column).sqltype}"
                 for column in key_columns
             ],
         )
@@ -295,7 +290,7 @@ class CacheDictMapping:
         if value_columns:
             value_column_definitions = ", -- value\n    ".join(
                 [
-                    f"'{column}' {getattr(values, column)}"
+                    f"'{column}' {getattr(values, column).sqltype}"
                     for column in value_columns
                 ],
             )
@@ -656,15 +651,13 @@ class CacheDictMapping:
     def _handle_column(
         cls,
         *,
-        column_dict: typing.Dict[ValidIdent, ValidSqlType],
+        column_dict: typing.Dict[ValidIdent, ColInfo],
+        original_name: Ident,
         validated_name: ValidIdent,
         sqltype: typing.Optional[SqlType],
-        names_dict: typing.Dict[ValidIdent, Ident],
-        original_name: Ident,
     ) -> None:
         validated_sqltype = cls._validate_sqltype(sqltype=sqltype)
-        column_dict[validated_name] = validated_sqltype
-        names_dict[validated_name] = original_name
+        column_dict[validated_name] = ColInfo(original_name, validated_sqltype)
 
     # fmt: off
     _IDENTIFIER_RE_DEFN = (

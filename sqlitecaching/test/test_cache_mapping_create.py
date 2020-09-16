@@ -398,6 +398,14 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         actual_statement = getattr(actual, statement_type)()
         self.assertEqual(expected_statement, actual_statement)
 
+        log.debug("check statement caching")
+        # since all the statements use the mapping tuple, changing it will
+        # cause all the statment methods to raise an error due to accessing
+        # properties of None
+        actual.mapping_tuple = None
+        actual_second_statement = getattr(actual, statement_type)()
+        self.assertIs(actual_statement, actual_second_statement)
+
     @parameterized.parameterized.expand(create_mapping_fail_params)
     def test_create_mapping_fail(self, name, mapping, expected, meta):
         log.debug("fail create CacheDictMapping")
