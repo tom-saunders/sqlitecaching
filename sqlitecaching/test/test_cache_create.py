@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 @test_level(TestLevel.PRE_COMMIT)
 class TestCacheDictCreation(SqliteCachingTestBase):
     def test_open_anon_memory(self):
-        c = CacheDict.open_anon_memory()
+        c = CacheDict.open_anon_memory(mapping=None)
         self.assertNotEqual(c, None)
 
     def test_open_anon_disk(self):

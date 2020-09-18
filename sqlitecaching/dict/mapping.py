@@ -37,38 +37,40 @@ CacheDictMappingKeyValOverlapException = __CDME.register_cause(
     cause_name=f"{__name__}.KeyValColumnOverlapException",
     cause_id=3,
     fmt=(
-        "the sets of key columns and value columns must be disjoint. columns [%s] "
-        "occur in both key and value sets"
+        "the sets of key columns and value columns must be disjoint. columns "
+        "[{columns}] occur in both key and value sets"
     ),
     params=frozenset(["columns"]),
 )
 CacheDictMappingNoIdentifierProvidedException = __CDME.register_cause(
     cause_name=f"{__name__}.NoIdentifierProvidedException",
     cause_id=4,
-    fmt="The identifier provided: [%s] does not have a value.",
+    fmt="The identifier provided: [{identifier}] does not have a value.",
     params=frozenset(["identifier"]),
 )
 CacheDictMappingDuplicateKeysException = __CDME.register_cause(
     cause_name=f"{__name__}.DuplicateKeysException",
     cause_id=5,
-    fmt="Duplicate key column identifiers provided: [%s]",
+    fmt="Duplicate key column identifiers provided: [{dups}]",
     params=frozenset(["dups"]),
 )
 CacheDictMappingInvalidSQLTypeException = __CDME.register_cause(
     cause_name=f"{__name__}.InvalidSQLTypeException",
     cause_id=6,
-    fmt="sqltype provided: [%s] does not match requirements [%s]",
+    fmt="sqltype provided: [{sqltype}] does not match requirements [{re}]",
     params=frozenset(["sqltype", "re"]),
 )
 CacheDictMappingDuplicateValuesException = __CDME.register_cause(
     cause_name=f"{__name__}.DuplicateValuesException",
     cause_id=7,
-    fmt="Duplicate value column identifiers provided: [%s]",
+    fmt="Duplicate value column identifiers provided: [{dups}]",
     params=frozenset(["dups"]),
 )
 
 Ident = typing.NewType("Ident", str)
+IdentIn = typing.Union[Ident, str]
 SqlType = typing.NewType("SqlType", str)
+SqlTypeIn = typing.Union[SqlType, str]
 
 ValidIdent = typing.NewType("ValidIdent", str)
 ValidSqlType = typing.NewType("ValidSqlType", str)
@@ -107,15 +109,25 @@ class CacheDictMapping:
         self,
         *,
         table: Ident,
-        keys: typing.Mapping[Ident, typing.Optional[SqlType]],
-        values: typing.Optional[typing.Mapping[Ident, typing.Optional[SqlType]]],
+        keys: typing.Mapping[IdentIn, typing.Optional[SqlTypeIn]],
+        values: typing.Optional[typing.Mapping[IdentIn, typing.Optional[SqlTypeIn]]],
     ):
         if not keys:
             raise CacheDictMappingMissingKeysException(params={"no_keys": keys})
 
+        _keys = {
+            Ident(column): (SqlType(sqltype) if sqltype else None)
+            for (column, sqltype) in keys.items()
+        }
+
         if not values:
             log.info("providing empty dict for values")
-            values = {}
+            _values = {}
+        else:
+            _values = {
+                Ident(column): (SqlType(sqltype) if sqltype else None)
+                for (column, sqltype) in values.items()
+            }
 
         validated_table = self._validate_identifier(identifier=table)
         if validated_table.startswith("'sqlite_"):
@@ -131,7 +143,7 @@ class CacheDictMapping:
         dup_value_columns: typing.Dict[ValidIdent, IdentClash] = {}
 
         unset_value = ColInfo(Ident("PLACE.HOLDER"), ValidSqlType("PLACE.HOLDER"))
-        for (name, sqltype) in keys.items():
+        for (name, sqltype) in _keys.items():
             validated_name = self._validate_identifier(identifier=name)
             in_keys = key_columns.get(validated_name, unset_value)
             if in_keys is not unset_value:
@@ -152,7 +164,7 @@ class CacheDictMapping:
                     sqltype=sqltype,
                 )
 
-        for (name, sqltype) in values.items():
+        for (name, sqltype) in _values.items():
             validated_name = self._validate_identifier(identifier=name)
             in_keys = key_columns.get(validated_name, unset_value)
             in_values = value_columns.get(validated_name, unset_value)
@@ -248,7 +260,7 @@ class CacheDictMapping:
         self._values_statement = None
 
     # fmt: off
-    _CREATE_FMT = (
+    _CREATE_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching create table\n"
         "CREATE TABLE {table_identifier}\n"
         "(\n"
@@ -259,7 +271,7 @@ class CacheDictMapping:
         "    {primary_key_definition}\n"
         ");\n"
     )
-    _PRIMARY_KEY_FMT = (
+    _PRIMARY_KEY_FMT: typing.ClassVar[str] = (
         "PRIMARY KEY (\n"
         "        {primary_key_columns}\n"
         "    ) ON CONFLICT ABORT"
@@ -317,7 +329,7 @@ class CacheDictMapping:
         return create_statement
 
     # fmt: off
-    _CLEAR_FMT = (
+    _CLEAR_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching clear table\n"
         "DELETE from {table_identifier};\n"
     )
@@ -341,7 +353,7 @@ class CacheDictMapping:
         return clear_statement
 
     # fmt: off
-    _DELETE_FMT = (
+    _DELETE_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching delete table\n"
         "DROP TABLE {table_identifier};\n"
     )
@@ -365,7 +377,7 @@ class CacheDictMapping:
         return delete_statement
 
     # fmt: off
-    _UPSERT_FMT = (
+    _UPSERT_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching insert or update into table\n"
         "INSERT INTO {table_identifier}\n"
         "(\n"
@@ -377,7 +389,7 @@ class CacheDictMapping:
         ") ON CONFLICT {upsert_stmt}\n"
         ";\n"
     )
-    _UPSERT_STMT_FMT = (
+    _UPSERT_STMT_FMT: typing.ClassVar[str] = (
         "(\n"
         "    -- key columns\n"
         "    {key_columns}\n"
@@ -445,7 +457,7 @@ class CacheDictMapping:
         return upsert_statement
 
     # fmt: off
-    _REMOVE_FMT = (
+    _REMOVE_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching remove from table\n"
         "DELETE FROM {table_identifier}\n"
         "WHERE (\n"
@@ -484,7 +496,7 @@ class CacheDictMapping:
         return remove_statement
 
     # fmt: off
-    _LENGTH_FMT = (
+    _LENGTH_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching table length\n"
         "SELECT COUNT(*) FROM {table_identifier};\n"
     )
@@ -508,7 +520,7 @@ class CacheDictMapping:
         return length_statement
 
     # fmt: off
-    _KEYS_FMT = (
+    _KEYS_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching table keys\n"
         "SELECT\n"
         "    {key_columns}\n"
@@ -539,7 +551,7 @@ class CacheDictMapping:
         return keys_statement
 
     # fmt: off
-    _ITEMS_FMT = (
+    _ITEMS_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching table items\n"
         "SELECT\n"
         "    -- all columns\n"
@@ -578,7 +590,7 @@ class CacheDictMapping:
         return items_statement
 
     # fmt: off
-    _VALUES_FMT = (
+    _VALUES_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching table values\n"
         "SELECT\n"
         "    {value_columns}\n"
@@ -624,7 +636,7 @@ class CacheDictMapping:
         column_dict[validated_name] = ColInfo(original_name, validated_sqltype)
 
     # fmt: off
-    _IDENTIFIER_RE_DEFN = (
+    _IDENTIFIER_RE_DEFN: typing.ClassVar[str] = (
         r"^               # start of string""\n"
         r"[a-z]           # start with an ascii letter""\n"
         r"[a-z0-9_]{0,62} # followed by up to 62 alphanumeric or underscores""\n"
@@ -632,7 +644,7 @@ class CacheDictMapping:
     )
     # fmt: on
 
-    _IDENTIFIER_PATTERN = re.compile(
+    _IDENTIFIER_PATTERN: typing.ClassVar[typing.Pattern[str]] = re.compile(
         _IDENTIFIER_RE_DEFN,
         flags=(re.ASCII | re.IGNORECASE | re.VERBOSE),
     )

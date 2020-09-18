@@ -1,5 +1,5 @@
 import logging
-from collections import namedtuple
+import typing
 
 import parameterized
 
@@ -7,6 +7,21 @@ from sqlitecaching.dict import CacheDict
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
+
+
+class Mapping(typing.NamedTuple):
+    table: str
+    keys: typing.Mapping[str, typing.Optional[str]]
+    values: typing.Optional[typing.Mapping[str, typing.Optional[str]]] = None
+
+
+class TestDef(typing.NamedTuple):
+    name: str
+    provider: typing.Callable[..., CacheDict]
+    provider_params: typing.Mapping[str, typing.Any]
+    mapping: Mapping
+    inputs: typing.Sequence[typing.Tuple[typing.Any, typing.Any]]
+    outputs: typing.Mapping[typing.Any, typing.Any]
 
 
 @test_level(TestLevel.PRE_COMMIT)
@@ -27,17 +42,13 @@ class TestCacheDictPersistence(SqliteCachingTestBase):
         }
         return test_config
 
-    TestDef = namedtuple(
-        "TestDef",
-        ["name", "provider", "provider_params", "inputs", "outputs"],
-    )
-
     @parameterized.parameterized.expand(
         [
             TestDef(
                 name="why",
                 provider=CacheDict.open_anon_memory,
                 provider_params={},
+                mapping=Mapping(table="tabl", keys={"z": None}),
                 inputs=[("a", "a")],
                 outputs={"a": "a"},
             ),
@@ -45,6 +56,7 @@ class TestCacheDictPersistence(SqliteCachingTestBase):
                 name="who",
                 provider=CacheDict.open_anon_memory,
                 provider_params={},
+                mapping=Mapping(table="tabl", keys={"z": None}),
                 inputs=[("a", "a"), ("a", "b")],
                 outputs={"a": "b"},
             ),
@@ -52,6 +64,7 @@ class TestCacheDictPersistence(SqliteCachingTestBase):
                 name="where",
                 provider=CacheDict.open_anon_memory,
                 provider_params={},
+                mapping=Mapping(table="tabl", keys={"z": None}),
                 inputs=[("a", "a"), ("b", "b")],
                 outputs={"a": "a", "b": "b"},
             ),
@@ -62,11 +75,12 @@ class TestCacheDictPersistence(SqliteCachingTestBase):
         name,
         provider,
         provider_params,
+        mapping,
         inputs,
         expected_outputs,
     ):
         missing_value = object()
-        cache_dict = provider(**provider_params)
+        cache_dict = provider(mapping=mapping, **provider_params)
 
         log.debug("load inputs into cache_dist")
         for (input_key, input_value) in inputs:
