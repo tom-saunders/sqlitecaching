@@ -8,11 +8,11 @@ from sqlitecaching.exceptions import SqliteCachingException
 
 log = logging.getLogger(__name__)
 
-CacheDictException = SqliteCachingException.register_category(
-    category_name=f"{__name__}.CacheDictException",
+CacheDictCategory = SqliteCachingException.register_category(
+    category_name=f"{__name__}.CacheDictCategory",
     category_id=1,
 )
-__CDE = CacheDictException
+__CDC = CacheDictCategory
 
 
 class CacheDict(UserDict):

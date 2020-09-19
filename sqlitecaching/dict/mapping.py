@@ -9,31 +9,31 @@ from sqlitecaching.exceptions import SqliteCachingException
 log = logging.getLogger(__name__)
 
 
-CacheDictMappingException = SqliteCachingException.register_category(
-    category_name=f"{__name__}.CacheDictMappingException",
+CacheDictMappingCategory = SqliteCachingException.register_category(
+    category_name=f"{__name__}.CacheDictMappingCategory",
     category_id=2,
 )
-__CDME = CacheDictMappingException
+__CDMC = CacheDictMappingCategory
 
-CacheDictMappingMissingKeysException = __CDME.register_cause(
+CacheDictMappingMissingKeysException = __CDMC.register_cause(
     cause_name=f"{__name__}.MappingMissingKeys",
     cause_id=0,
     fmt="Mapping must have keys, provided: [{no_keys}]",
     params=frozenset(["no_keys"]),
 )
-CacheDictMappingReservedTableException = __CDME.register_cause(
+CacheDictMappingReservedTableException = __CDMC.register_cause(
     cause_name=f"{__name__}.ReservedTableException",
     cause_id=1,
     fmt="table cannot start with sqlite_ : [{table_name}]",
     params=frozenset(["table_name"]),
 )
-CacheDictMappingInvalidIdentifierException = __CDME.register_cause(
+CacheDictMappingInvalidIdentifierException = __CDMC.register_cause(
     cause_name=f"{__name__}.InvalidIdentifierException",
     cause_id=2,
     fmt="identifier provided: [{identifier}] does not match requirements [{re}]",
     params=frozenset(["identifier", "re"]),
 )
-CacheDictMappingKeyValOverlapException = __CDME.register_cause(
+CacheDictMappingKeyValOverlapException = __CDMC.register_cause(
     cause_name=f"{__name__}.KeyValColumnOverlapException",
     cause_id=3,
     fmt=(
@@ -42,25 +42,25 @@ CacheDictMappingKeyValOverlapException = __CDME.register_cause(
     ),
     params=frozenset(["columns"]),
 )
-CacheDictMappingNoIdentifierProvidedException = __CDME.register_cause(
+CacheDictMappingNoIdentifierProvidedException = __CDMC.register_cause(
     cause_name=f"{__name__}.NoIdentifierProvidedException",
     cause_id=4,
     fmt="The identifier provided: [{identifier}] does not have a value.",
     params=frozenset(["identifier"]),
 )
-CacheDictMappingDuplicateKeysException = __CDME.register_cause(
+CacheDictMappingDuplicateKeysException = __CDMC.register_cause(
     cause_name=f"{__name__}.DuplicateKeysException",
     cause_id=5,
     fmt="Duplicate key column identifiers provided: [{dups}]",
     params=frozenset(["dups"]),
 )
-CacheDictMappingInvalidSQLTypeException = __CDME.register_cause(
+CacheDictMappingInvalidSQLTypeException = __CDMC.register_cause(
     cause_name=f"{__name__}.InvalidSQLTypeException",
     cause_id=6,
     fmt="sqltype provided: [{sqltype}] does not match requirements [{re}]",
     params=frozenset(["sqltype", "re"]),
 )
-CacheDictMappingDuplicateValuesException = __CDME.register_cause(
+CacheDictMappingDuplicateValuesException = __CDMC.register_cause(
     cause_name=f"{__name__}.DuplicateValuesException",
     cause_id=7,
     fmt="Duplicate value column identifiers provided: [{dups}]",
@@ -113,7 +113,7 @@ class CacheDictMapping:
         values: typing.Optional[typing.Mapping[IdentIn, typing.Optional[SqlTypeIn]]],
     ):
         if not keys:
-            raise CacheDictMappingMissingKeysException(params={"no_keys": keys})
+            raise CacheDictMappingMissingKeysException({"no_keys": keys})
 
         _keys = {
             Ident(column): (SqlType(sqltype) if sqltype else None)
@@ -132,7 +132,7 @@ class CacheDictMapping:
         validated_table = self._validate_identifier(identifier=table)
         if validated_table.startswith("'sqlite_"):
             raise CacheDictMappingReservedTableException(
-                params={"table_name": validated_table},
+                {"table_name": validated_table},
             )
 
         key_columns: typing.Dict[ValidIdent, ColInfo] = collections.OrderedDict()
@@ -212,12 +212,12 @@ class CacheDictMapping:
                 val_strs.append(val_str)
             dup_val_str = ", ".join(val_strs)
             to_raise = CacheDictMappingDuplicateValuesException(
-                params={"dups": dup_val_str},
+                {"dups": dup_val_str},
             )
 
         if keyval_columns:
             keyval_str = "'" + "', '".join(keyval_columns) + "'"
-            ex = CacheDictMappingKeyValOverlapException(params={"columns": keyval_str})
+            ex = CacheDictMappingKeyValOverlapException({"columns": keyval_str})
             ex.__cause__ = to_raise
             to_raise = ex
 
@@ -232,7 +232,7 @@ class CacheDictMapping:
                 key_strs.append(key_str)
             dup_key_str = ", ".join(key_strs)
             ex = CacheDictMappingDuplicateKeysException(
-                params={"dups": dup_key_str},
+                {"dups": dup_key_str},
             )
             ex.__cause__ = to_raise
             to_raise = ex
@@ -653,7 +653,7 @@ class CacheDictMapping:
     def _validate_identifier(cls, *, identifier: Ident) -> ValidIdent:
         if not identifier:
             raise CacheDictMappingNoIdentifierProvidedException(
-                params={"identifier": identifier},
+                {"identifier": identifier},
             )
 
         if identifier != identifier.strip():
@@ -677,7 +677,7 @@ class CacheDictMapping:
                 cls._IDENTIFIER_RE_DEFN,
             )
             raise CacheDictMappingInvalidIdentifierException(
-                params={"identifier": identifier, "re": cls._IDENTIFIER_RE_DEFN},
+                {"identifier": identifier, "re": cls._IDENTIFIER_RE_DEFN},
             )
         lower_identifier = identifier.lower()
         if identifier != lower_identifier:
@@ -714,7 +714,7 @@ class CacheDictMapping:
         match = cls._IDENTIFIER_PATTERN.match(sqltype)
         if not match:
             raise CacheDictMappingInvalidSQLTypeException(
-                params={"sqltype": sqltype, "re": cls._IDENTIFIER_RE_DEFN},
+                {"sqltype": sqltype, "re": cls._IDENTIFIER_RE_DEFN},
             )
         upper_sqltype = ValidSqlType(sqltype.upper())
         if sqltype != upper_sqltype:

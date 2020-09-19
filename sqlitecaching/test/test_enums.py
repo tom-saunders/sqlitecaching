@@ -196,8 +196,8 @@ class TestSqliteCachingEnums(SqliteCachingTestBase):
                 q = 1
 
         actual = raised_context.exception
-        self.assertEqual(actual.category_id, EnumNameClashException._category_id)
-        self.assertEqual(actual.cause_id, EnumNameClashException._cause_id)
+        self.assertEqual(actual.category.id, EnumNameClashException.category_id)
+        self.assertEqual(actual.cause.id, EnumNameClashException.id)
 
     def test_no_duplicate_values(self):
         with self.assertRaises(SqliteCachingException) as raised_context:
@@ -207,8 +207,8 @@ class TestSqliteCachingEnums(SqliteCachingTestBase):
                 Y = 0
 
         actual = raised_context.exception
-        self.assertEqual(actual.category_id, EnumDuplicateValueException._category_id)
-        self.assertEqual(actual.cause_id, EnumDuplicateValueException._cause_id)
+        self.assertEqual(actual.category.id, EnumDuplicateValueException.category_id)
+        self.assertEqual(actual.cause.id, EnumDuplicateValueException.id)
 
     @parameterized.parameterized.expand(value_str_params)
     def test_value_strs(self, name, left, expected, _):
@@ -224,5 +224,5 @@ class TestSqliteCachingEnums(SqliteCachingTestBase):
         with self.assertRaises(SqliteCachingException) as raised_context:
             _ = TestEnumAB.convert("mismatch")
         actual = raised_context.exception
-        self.assertEqual(actual.category_id, EnumValueConversionException._category_id)
-        self.assertEqual(actual.cause_id, EnumValueConversionException._cause_id)
+        self.assertEqual(actual.category.id, EnumValueConversionException.category_id)
+        self.assertEqual(actual.cause.id, EnumValueConversionException.id)

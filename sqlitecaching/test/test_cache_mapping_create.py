@@ -8,7 +8,6 @@ from sqlitecaching.dict.mapping import (
     CacheDictMapping,
     CacheDictMappingDuplicateKeysException,
     CacheDictMappingDuplicateValuesException,
-    CacheDictMappingException,
     CacheDictMappingInvalidIdentifierException,
     CacheDictMappingInvalidSQLTypeException,
     CacheDictMappingKeyValOverlapException,
@@ -16,7 +15,7 @@ from sqlitecaching.dict.mapping import (
     CacheDictMappingNoIdentifierProvidedException,
     CacheDictMappingReservedTableException,
 )
-from sqlitecaching.exceptions import SqliteCachingException
+from sqlitecaching.exceptions import ParamMap, SqliteCachingException
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
@@ -37,7 +36,7 @@ class Def(typing.NamedTuple):
 
 class FailRes(typing.NamedTuple):
     name: str
-    exception: typing.Type[SqliteCachingException]
+    exception: typing.Callable[[ParamMap], SqliteCachingException]
 
 
 class InputDef(typing.NamedTuple):
@@ -420,16 +419,16 @@ class TestCacheDictMapping(SqliteCachingTestBase):
     @parameterized.parameterized.expand(create_mapping_fail_params)
     def test_create_mapping_fail(self, name, mapping, expected, meta):
         log.debug("fail create CacheDictMapping")
-        # If we use expected here rather than CacheDictMappingException then
+        # If we use expected here rather than SqliteCachingException then
         # the test _errors_ rather than fails. The asserts afterwards will
         # fail based on the value of expected
-        with self.assertRaises(CacheDictMappingException) as raised_context:
+        with self.assertRaises(SqliteCachingException) as raised_context:
             CacheDictMapping(
                 table=mapping.table,
                 keys=mapping.keys,
                 values=mapping.values,
             )
         actual = raised_context.exception
-        self.assertEqual(actual.category_id, expected._category_id, actual.msg)
-        self.assertEqual(actual.cause_id, expected._cause_id, actual.msg)
-        log.info(raised_context.exception._expected_params)
+        self.assertEqual(actual.category.id, expected.category_id, actual.msg)
+        self.assertEqual(actual.cause.id, expected.id, actual.msg)
+        log.info(actual.cause.params)

@@ -8,12 +8,12 @@ from sqlitecaching.exceptions import SqliteCachingException
 log = logging.getLogger(__name__)
 
 
-EnumException = SqliteCachingException.register_category(
-    category_name=f"{__name__}.EnumException",
+EnumCategory = SqliteCachingException.register_category(
+    category_name=f"{__name__}.EnumCategory",
     category_id=3,
 )
 
-EnumDuplicateValueException = EnumException.register_cause(
+EnumDuplicateValueException = EnumCategory.register_cause(
     cause_name=f"{__name__}.EnumDuplicateValueException",
     cause_id=0,
     fmt=(
@@ -29,7 +29,7 @@ EnumDuplicateValueException = EnumException.register_cause(
         ],
     ),
 )
-EnumNameClashException = EnumException.register_cause(
+EnumNameClashException = EnumCategory.register_cause(
     cause_name=f"{__name__}.EnumNameClashException",
     cause_id=1,
     fmt=(
@@ -45,7 +45,7 @@ EnumNameClashException = EnumException.register_cause(
         ],
     ),
 )
-EnumValueConversionException = EnumException.register_cause(
+EnumValueConversionException = EnumCategory.register_cause(
     cause_name=f"{__name__}.EnumValueConversionException",
     cause_id=2,
     fmt=(
@@ -75,7 +75,7 @@ class LevelledEnum(enum.Enum):
             new_name = self.name
             existing_name = matching_values[0]
             raise EnumDuplicateValueException(
-                params={
+                {
                     "enum_name": enum_name,
                     "new_name": new_name,
                     "existing_name": existing_name,
@@ -92,7 +92,7 @@ class LevelledEnum(enum.Enum):
             existing_name = matching_names[0]
             casefolded_name = new_name.casefold()
             raise EnumNameClashException(
-                params={
+                {
                     "enum_name": enum_name,
                     "new_name": new_name,
                     "existing_name": existing_name,
@@ -116,7 +116,7 @@ class LevelledEnum(enum.Enum):
             if value.replace("-", "_").casefold() == candidate._name_.casefold():
                 return candidate
         raise EnumValueConversionException(
-            params={
+            {
                 "enum_name": cls.__name__,
                 "to_convert": value,
             },
