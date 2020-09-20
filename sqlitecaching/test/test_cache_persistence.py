@@ -3,7 +3,8 @@ import typing
 
 import parameterized
 
-from sqlitecaching.dict import CacheDict
+from sqlitecaching.dict.dict import CacheDict
+from sqlitecaching.dict.mapping import CacheDictMapping
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
@@ -73,13 +74,18 @@ class TestCacheDictPersistence(SqliteCachingTestBase):
     def test_retrieve_stored_value(
         self,
         name,
-        provider,
+        provider: typing.Callable[..., CacheDict],
         provider_params,
-        mapping,
+        map_def: Mapping,
         inputs,
         expected_outputs,
     ):
         missing_value = object()
+        mapping = CacheDictMapping(
+            table=map_def.table,
+            keys=map_def.keys,
+            values=map_def.values,
+        )
         cache_dict = provider(mapping=mapping, **provider_params)
 
         log.debug("load inputs into cache_dist")

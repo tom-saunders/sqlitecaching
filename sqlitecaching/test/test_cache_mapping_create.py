@@ -15,28 +15,34 @@ from sqlitecaching.dict.mapping import (
     CacheDictMappingNoIdentifierProvidedException,
     CacheDictMappingReservedTableException,
 )
-from sqlitecaching.exceptions import ParamMap, SqliteCachingException
+from sqlitecaching.exceptions import ExceptProvider, ParamMap, SqliteCachingException
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
 
 
 class In(typing.NamedTuple):
+    table: str
+    keys: ParamMap
+    values: typing.Optional[ParamMap]
+
+
+class InvIn(typing.NamedTuple):
     table: typing.Optional[str]
     keys: typing.Mapping[typing.Optional[str], typing.Optional[str]]
-    values: typing.Mapping[typing.Optional[str], typing.Optional[str]]
+    values: typing.Optional[typing.Mapping[typing.Optional[str], typing.Optional[str]]]
 
 
 class Def(typing.NamedTuple):
     name: str
-    mapping: In
+    mapping: typing.Union[In, InvIn]
     expected: typing.Any
     meta: typing.Optional[typing.Any] = None
 
 
 class FailRes(typing.NamedTuple):
     name: str
-    exception: typing.Callable[[ParamMap], SqliteCachingException]
+    exception: ExceptProvider[SqliteCachingException]
 
 
 class InputDef(typing.NamedTuple):
@@ -46,7 +52,7 @@ class InputDef(typing.NamedTuple):
 
 class FailInputDef(typing.NamedTuple):
     result: FailRes
-    mapping: In
+    mapping: InvIn
 
 
 @test_level(TestLevel.PRE_COMMIT)
@@ -180,7 +186,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="blank_table_name",
                 exception=CacheDictMappingNoIdentifierProvidedException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="",
                 keys={"a": "A"},
                 values={"b": "B"},
@@ -191,7 +197,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="none_table_name",
                 exception=CacheDictMappingNoIdentifierProvidedException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table=None,
                 keys={"a": "A"},
                 values={"b": "B"},
@@ -202,7 +208,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="space_table_name",
                 exception=CacheDictMappingInvalidIdentifierException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table=" ",
                 keys={"a": "A"},
                 values={"b": "B"},
@@ -213,7 +219,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="invalid_table_name",
                 exception=CacheDictMappingInvalidIdentifierException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="x.y",
                 keys={"a": "A"},
                 values={"b": "B"},
@@ -224,7 +230,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="reserved_table_name",
                 exception=CacheDictMappingReservedTableException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="sqlite_a",
                 keys={"a": "A"},
                 values={"b": "B"},
@@ -235,7 +241,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="missing_keys",
                 exception=CacheDictMappingMissingKeysException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="__bB",
                 keys={},
                 values={"b": "B"},
@@ -246,7 +252,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="overlapping_key_ands_values",
                 exception=CacheDictMappingKeyValOverlapException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="aA__aA_bB",
                 keys={"a": "A"},
                 values={"a": "A", "b": "B"},
@@ -257,7 +263,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="blank_key_name",
                 exception=CacheDictMappingNoIdentifierProvidedException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="A_bB",
                 keys={"": "A"},
                 values={"b": "B"},
@@ -268,7 +274,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="none_key_name",
                 exception=CacheDictMappingNoIdentifierProvidedException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="A_bB",
                 keys={None: "A"},
                 values={"b": "B"},
@@ -279,7 +285,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="space_key_name",
                 exception=CacheDictMappingInvalidIdentifierException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="A_bB",
                 keys={" ": "A"},
                 values={"b": "B"},
@@ -290,7 +296,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="invalid_key_name",
                 exception=CacheDictMappingInvalidIdentifierException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="A_bB",
                 keys={"x.y": "A"},
                 values={"b": "B"},
@@ -301,7 +307,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="duplicated_key_name",
                 exception=CacheDictMappingDuplicateKeysException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="aA_AA__bB",
                 keys={"a": "A", "A": "A"},
                 values={"b": "B"},
@@ -312,7 +318,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="duplicated_key_name2",
                 exception=CacheDictMappingDuplicateKeysException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="aA_a_A__bB",
                 keys={"a": "A", "a ": "A"},
                 values={"b": "B"},
@@ -323,7 +329,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="duplicated_value_name",
                 exception=CacheDictMappingDuplicateValuesException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="aA_AA__bB_BB",
                 keys={"a": "A"},
                 values={"b": "B", "B": "B"},
@@ -334,7 +340,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="duplicated_value_name2",
                 exception=CacheDictMappingDuplicateValuesException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="aA_AA__bB_b_B",
                 keys={"a": "A"},
                 values={"b": "B", "b ": "B"},
@@ -345,7 +351,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="invalid_key_sqltype",
                 exception=CacheDictMappingInvalidSQLTypeException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="aA_B__bB",
                 keys={"a": "A.B"},
                 values={"b": "B"},
@@ -356,7 +362,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 name="invalid_value_sqltype",
                 exception=CacheDictMappingInvalidSQLTypeException,
             ),
-            mapping=In(
+            mapping=InvIn(
                 table="aA__bB_A",
                 keys={"a": "A"},
                 values={"b": "B.A"},
@@ -393,9 +399,15 @@ class TestCacheDictMapping(SqliteCachingTestBase):
     ]
 
     @parameterized.parameterized.expand(create_mapping_success_params)
-    def test_create_mapping_success(self, name, mapping, expected, statement_type):
+    def test_create_mapping_success(
+        self,
+        name: str,
+        mapping: In,
+        expected: str,
+        statement_type: str,
+    ):
         log.debug("create CacheDictMapping")
-        actual = CacheDictMapping(
+        actual = CacheDictMapping(  # typing: ignore
             table=mapping.table,
             keys=mapping.keys,
             values=mapping.values,
@@ -409,24 +421,33 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         self.assertEqual(expected_statement, actual_statement)
 
         log.debug("check statement caching")
-        # since all the statements use the mapping tuple, changing it will
-        # cause all the statment methods to raise an error due to accessing
-        # properties of None
-        actual.mapping_tuple = None
+        # since all the statements use the table_ident, changing it will
+        # cause all the statment methods to return different responses unless
+        # the value is cached. The actual type is ValidIdent but it is actually
+        # a str underneath.
+        actual.table_ident = ""  # type: ignore
         actual_second_statement = getattr(actual, statement_type)()
         self.assertIs(actual_statement, actual_second_statement)
 
     @parameterized.parameterized.expand(create_mapping_fail_params)
-    def test_create_mapping_fail(self, name, mapping, expected, meta):
+    def test_create_mapping_fail(
+        self,
+        name: str,
+        mapping: InvIn,
+        expected: ExceptProvider[SqliteCachingException],
+        _,
+    ):
         log.debug("fail create CacheDictMapping")
         # If we use expected here rather than SqliteCachingException then
         # the test _errors_ rather than fails. The asserts afterwards will
         # fail based on the value of expected
         with self.assertRaises(SqliteCachingException) as raised_context:
+            # We are intentionally providing values which don't meet the typing
+            # specified by the __init__ method, so have to ignore types here
             CacheDictMapping(
-                table=mapping.table,
-                keys=mapping.keys,
-                values=mapping.values,
+                table=mapping.table,  # type: ignore
+                keys=mapping.keys,  # type: ignore
+                values=mapping.values,  # type: ignore
             )
         actual = raised_context.exception
         self.assertEqual(actual.category.id, expected.category_id, actual.msg)

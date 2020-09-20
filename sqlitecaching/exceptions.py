@@ -38,7 +38,7 @@ except NameError:
     CATEGORY_REG: typing.Dict[CategoryID, Category] = {}
 
 
-class CauseProvider(typing.Generic[T]):
+class ExceptProvider(typing.Generic[T]):
     subcls: typing.Type[T]
 
     category_id: CategoryID
@@ -100,7 +100,7 @@ class CategoryProvider(typing.Generic[T]):
         cause_id: CauseInt,
         fmt: FormatStr,
         params: ParamSet,
-    ) -> typing.Callable[[ParamMap], T]:
+    ) -> ExceptProvider[T]:
         cause_id = CauseID(cause_id)
         cause_name = Name(cause_name)
         fmt = Format(fmt)
@@ -145,7 +145,7 @@ class CategoryProvider(typing.Generic[T]):
         )
         causes[cause_id] = cause
 
-        return CauseProvider[T](
+        return ExceptProvider[T](
             except_cls=self.except_cls,
             category_id=self.id,
             cause_id=cause_id,

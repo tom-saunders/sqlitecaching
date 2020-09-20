@@ -1,11 +1,44 @@
+import enum
 import logging
 import shutil
+import sqlite3
 import tempfile
+import typing
 
-from sqlitecaching.dict import CacheDict, ToCreate
+import parameterized
+
+from sqlitecaching.dict.dict import CacheDict, ToCreate
+from sqlitecaching.dict.mapping import CacheDictMapping
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
+
+
+@enum.unique
+class ActionType(enum.Enum):
+    ADD = enum.auto()
+    REM = enum.auto()
+    CLR = enum.auto()
+    CRT = enum.auto()
+    DEL = enum.auto()
+
+
+class Action(typing.NamedTuple):
+    type: ActionType
+    result: typing.Optional[typing.Mapping[typing.Any, typing.Any]]
+    key: typing.Optional[typing.Any] = None
+    value: typing.Optional[typing.Any] = None
+
+
+class Extra(typing.NamedTuple):
+    preexisting: typing.Optional[typing.Mapping[typing.Any, typing.Any]] = None
+    actions: typing.Optional[typing.Iterable[Action]] = None
+
+
+class Def(typing.NamedTuple):
+    name: str
+    mapping: CacheDictMapping
+    extra: Extra
 
 
 @test_level(TestLevel.PRE_COMMIT)
@@ -13,7 +46,7 @@ class TestCacheDictCreation(SqliteCachingTestBase):
     tmp_dir: int
 
     def setUp(self):
-        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.tmp_dir = tempfile.mkdtemp(prefix=".test_tmp")
         shutil.copytree(
             f"{self.res_dir}/dicts/",
             f"{self.tmp_dir}/",
@@ -21,41 +54,84 @@ class TestCacheDictCreation(SqliteCachingTestBase):
         )
 
     def tearDown(self):
-        self.tmp_dir.cleanup()
+        shutil.rmtree(self.tmp_dir)
 
-    def test_open_anon_memory(self):
-        c = CacheDict.open_anon_memory(mapping=None)
+    success_params = [
+        Def(
+            name="minimal",
+            mapping=CacheDictMapping(
+                table="minimal",
+                keys={"a": "A"},
+                values=None,
+            ),
+            extra=Extra(preexisting={}, actions=[]),
+        ),
+    ]
+
+    @parameterized.parameterized.expand(success_params)
+    def test_open_anon_memory(self, name: str, mapping: CacheDictMapping, extra: Extra):
+        c = CacheDict.open_anon_memory(mapping=mapping)
         self.assertNotEqual(c, None)
 
-    def test_open_anon_disk(self):
-        c = CacheDict.open_anon_disk(mapping=None)
+    @parameterized.parameterized.expand(success_params)
+    def test_open_anon_disk(self, name: str, mapping: CacheDictMapping, extra: Extra):
+        c = CacheDict.open_anon_disk(mapping=mapping)
         self.assertNotEqual(c, None)
 
-    def test_open_readonly(self):
+    @parameterized.parameterized.expand(success_params)
+    def test_open_readonly(self, name: str, mapping: CacheDictMapping, extra: Extra):
         c = CacheDict.open_readonly(
-            path=f"{self.tmp_dir}/readonly.empty.sqlite",
-            mapping=None,
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
         )
         self.assertNotEqual(c, None)
 
-    def test_open_readwrite(self):
+    @parameterized.parameterized.expand(success_params)
+    def test_open_readwrite(self, name: str, mapping: CacheDictMapping, extra: Extra):
         c = CacheDict.open_readwrite(
-            path=f"{self.tmp_dir}/readwrite.empty.sqlite",
-            mapping=None,
+            path=f"{self.tmp_dir}/{name}.readwrite.sqlite",
+            mapping=mapping,
         )
         self.assertNotEqual(c, None)
 
-    def test_open_readwrite_create(self):
+    @parameterized.parameterized.expand(success_params)
+    def test_open_readwrite_create_table(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
         c = CacheDict.open_readwrite(
-            path=f"{self.tmp_dir}/tmpfile.sqlite",
-            mapping=None,
+            path=f"{self.tmp_dir}/{name}.create.table.sqlite",
+            mapping=mapping,
+            create=ToCreate.TABLE,
+        )
+        self.assertNotEqual(c, None)
+
+    @parameterized.parameterized.expand(success_params)
+    def test_open_readwrite_create_db(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        c = CacheDict.open_readwrite(
+            path=f"{self.tmp_dir}/{name}.create.db.sqlite",
+            mapping=mapping,
             create=ToCreate.DATABASE,
         )
         self.assertNotEqual(c, None)
 
-    def test_create_from_connection_noargs(self):
+    @parameterized.parameterized.expand(success_params)
+    def test_create_from_connection_noargs(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        conn = sqlite3.connect("")
         c = CacheDict._create_from_conn(
-            conn=None,
-            mapping=None,
+            conn=conn,
+            mapping=mapping,
         )
         self.assertNotEqual(c, None)

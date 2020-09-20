@@ -108,10 +108,11 @@ class CacheDictMapping:
     def __init__(
         self,
         *,
-        table: Ident,
+        table: IdentIn,
         keys: typing.Mapping[IdentIn, typing.Optional[SqlTypeIn]],
         values: typing.Optional[typing.Mapping[IdentIn, typing.Optional[SqlTypeIn]]],
     ):
+        _table = Ident(table)
         if not keys:
             raise CacheDictMappingMissingKeysException({"no_keys": keys})
 
@@ -129,7 +130,7 @@ class CacheDictMapping:
                 for (column, sqltype) in values.items()
             }
 
-        validated_table = self._validate_identifier(identifier=table)
+        validated_table = self._validate_identifier(identifier=_table)
         if validated_table.startswith("'sqlite_"):
             raise CacheDictMappingReservedTableException(
                 {"table_name": validated_table},
