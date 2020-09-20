@@ -221,7 +221,7 @@ class SqliteCachingException(Exception):
                 "unexpected additional parameters provided: [%s]",
                 additional_params,
             )
-            if self._raise_on_additional_params:
+            if self.raise_on_additional_params():
                 raise SqliteCachingException(
                     category_id=CategoryID(0),
                     cause_id=CauseID(6),
@@ -251,7 +251,7 @@ class SqliteCachingException(Exception):
     @classmethod
     def raise_on_additional_params(
         cls,
-        should_raise: typing.Optional[bool],
+        should_raise: typing.Optional[bool] = None,
         /,
     ) -> bool:
         if should_raise is not None:

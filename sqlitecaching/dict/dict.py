@@ -14,18 +14,24 @@ CacheDictCategory = SqliteCachingException.register_category(
 )
 __CDC = CacheDictCategory
 
+CacheDictFilteredSqliteParamsException = __CDC.register_cause(
+    cause_name=f"{__name__}.CacheDictFilteredSqliteParamsException",
+    cause_id=0,
+    fmt="sqlite_params provided to CacheDict contained unsupported keys: [{filtered}]",
+    params=frozenset(["filtered"]),
+)
+
 
 class CacheDict(UserDict):
     __internally_constructed: typing.ClassVar[typing.Any] = object()
+    _raise_on_filtered_sqlite_params: typing.ClassVar[bool] = False
 
-    _ANON_MEM_PATH: typing.ClassVar[str] = ":memory:"
-    _ANON_DISK_PATH: typing.ClassVar[str] = ""
+    ANON_MEM_PATH: typing.ClassVar[str] = ":memory:"
+    ANON_DISK_PATH: typing.ClassVar[str] = ""
 
-    # Not including
-    # "detect_types",
-    # as that should be dependant on mapping(?)
-    _PASSTHROUGH_PARAMS: typing.ClassVar[typing.List[str]] = [
+    PASSTHROUGH_PARAMS: typing.ClassVar[typing.List[str]] = [
         "timeout",
+        "detect_types",
         "isolation_level",
         "factory",
         "cached_statements",
@@ -74,6 +80,21 @@ class CacheDict(UserDict):
             )
 
     @classmethod
+    def raise_on_filtered_sqlite_params(
+        cls,
+        should_raise: typing.Optional[bool] = None,
+        /,
+    ) -> bool:
+        if should_raise is not None:
+            log.warning(
+                "setting [%s]._raise_on_filtered_sqlite_params to [%s]",
+                cls.__name__,
+                should_raise,
+            )
+            cls._raise_on_filtered_sqlite_params = should_raise
+        return cls._raise_on_filtered_sqlite_params
+
+    @classmethod
     def _cleanup_sqlite_params(
         cls,
         *,
@@ -82,9 +103,10 @@ class CacheDict(UserDict):
         if not sqlite_params:
             return {}
 
+        filtered_params: typing.FrozenSet[str] = frozenset([])
         cleaned_params = {}
         for (param, value) in sqlite_params.items():
-            if param in cls._PASSTHROUGH_PARAMS:
+            if param in cls.PASSTHROUGH_PARAMS:
                 if value:
                     cleaned_params[param] = value
                 else:
@@ -98,6 +120,10 @@ class CacheDict(UserDict):
                     param,
                     value,
                 )
+                filtered_params = filtered_params | frozenset([param])
+        if cls.raise_on_filtered_sqlite_params():
+            log.info("raising for filtered sqlite params")
+            raise CacheDictFilteredSqliteParamsException({"filtered": filtered_params})
         return cleaned_params
 
     @classmethod
@@ -117,7 +143,7 @@ class CacheDict(UserDict):
         else:
             cleaned_sqlite_params = {}
 
-        conn = sqlite3.connect(cls._ANON_MEM_PATH, **cleaned_sqlite_params)
+        conn = sqlite3.connect(cls.ANON_MEM_PATH, **cleaned_sqlite_params)
 
         return CacheDict(
             conn=conn,
@@ -137,7 +163,7 @@ class CacheDict(UserDict):
         log.info("open anon disk")
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params=sqlite_params)
 
-        conn = sqlite3.connect(cls._ANON_DISK_PATH, **cleaned_sqlite_params)
+        conn = sqlite3.connect(cls.ANON_DISK_PATH, **cleaned_sqlite_params)
 
         return CacheDict(
             conn=conn,
