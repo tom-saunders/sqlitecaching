@@ -1,5 +1,6 @@
 import logging
 
+import sqlitecaching.exceptions
 from sqlitecaching.exceptions import (
     CategoryID,
     SqliteCachingAdditionalParamsException,
@@ -34,7 +35,7 @@ class TestSqliteCachingException(SqliteCachingTestBase):
         category_name="TestDeletedCategory",
         category_id=TEST_DELETED_CATEGORY,
     )
-    del SqliteCachingException._categories[CategoryID(TEST_DELETED_CATEGORY)]
+    del sqlitecaching.exceptions.CATEGORY_REG[CategoryID(TEST_DELETED_CATEGORY)]
 
     TestCauseException = TestCategory.register_cause(
         cause_name="TestCauseException",

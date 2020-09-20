@@ -16,7 +16,6 @@ FormatStr = typing.Union[Format, str]
 CategoryInt = typing.Union[CategoryID, int]
 CauseInt = typing.Union[CauseID, int]
 
-
 T = typing.TypeVar("T", bound="SqliteCachingException")
 
 
@@ -31,6 +30,12 @@ class Category(typing.NamedTuple):
     id: CategoryID
     name: Name
     causes: typing.Dict[CauseID, Cause]
+
+
+try:
+    _ = CATEGORY_REG
+except NameError:
+    CATEGORY_REG: typing.Dict[CategoryID, Category] = {}
 
 
 class CauseProvider(typing.Generic[T]):
@@ -107,7 +112,7 @@ class CategoryProvider(typing.Generic[T]):
             cause_id,
         )
 
-        category = self.except_cls._categories.get(self.id, None)
+        category = CATEGORY_REG.get(self.id, None)
         if not category:
             raise SqliteCachingException(
                 category_id=CategoryID(0),
@@ -149,7 +154,6 @@ class CategoryProvider(typing.Generic[T]):
 
 
 class SqliteCachingException(Exception):
-    _categories: typing.ClassVar[typing.Dict[CategoryID, Category]] = {}
     _raise_on_additional_params: typing.ClassVar[bool] = False
 
     category: Category
@@ -168,7 +172,7 @@ class SqliteCachingException(Exception):
         self.params = params
 
         try:
-            self.category = self._categories[category_id]
+            self.category = CATEGORY_REG[category_id]
         except KeyError:
             raise SqliteCachingException(
                 category_id=CategoryID(0),
@@ -271,7 +275,7 @@ class SqliteCachingException(Exception):
 
         log.info("registering category [%s] with id [%d]", category_name, category_id)
 
-        existing_category = cls._categories.get(category_id, None)
+        existing_category = CATEGORY_REG.get(category_id, None)
         if existing_category:
             raise SqliteCachingException(
                 category_id=CategoryID(0),
@@ -285,7 +289,7 @@ class SqliteCachingException(Exception):
             )
 
         category = Category(id=category_id, name=category_name, causes={})
-        cls._categories[category_id] = category
+        CATEGORY_REG[category_id] = category
 
         return CategoryProvider[T](
             except_cls=cls,
