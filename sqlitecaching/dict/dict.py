@@ -23,11 +23,17 @@ CacheDictFilteredSqliteParamsException = __CDC.register_cause(
     params=frozenset(["filtered"]),
 )
 
+CacheDictReadOnlyException = __CDC.register_cause(
+    cause_name=f"{__name__}.CacheDictReadOnlyException",
+    cause_id=1,
+    fmt="attempting to perform [{op}] on readonly table [{table}]",
+    params=frozenset(["op", "table"]),
+)
+
 
 @enum.unique
 class ToCreate(enum.Enum):
     NONE = enum.auto()
-    TABLE = enum.auto()
     DATABASE = enum.auto()
 
 
@@ -77,9 +83,22 @@ class CacheDict(UserDict):
         self.mapping = mapping
         self.read_only = read_only
 
+        if not read_only:
+            # creating the mapped table should be idempotent
+            # (CREATE TABLE ... IF NOT EXIST ...)
+            # but obviously doesn't work for readonly connections
+            self.create_table()
+
         log.info("created [%#0x] conn: [%s]", id(self), self.conn)
 
     def create_table(self) -> None:
+        if self.read_only:
+            raise CacheDictReadOnlyException(
+                {
+                    "op": "create",
+                    "table": self.mapping.table_ident,
+                },
+            )
         log.debug("create table [%#0x]")
         create_stmt = self.mapping.create_statement()
         cursor = self.conn.execute(create_stmt)
@@ -190,7 +209,6 @@ class CacheDict(UserDict):
             _cd_internal_flag=cls._internally_constructed,
         )
 
-        cache_dict.create_table()
         return cache_dict
 
     @classmethod
@@ -272,7 +290,6 @@ class CacheDict(UserDict):
             _cd_internal_flag=cls._internally_constructed,
         )
 
-        # TODO create table if create_table in (ToCreate.TABLE, ToCreate.DATABASE)
         return cache_dict
 
     @classmethod

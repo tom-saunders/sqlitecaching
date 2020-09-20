@@ -95,28 +95,14 @@ class TestCacheDictCreation(SqliteCachingTestBase):
         self.assertNotEqual(c, None)
 
     @parameterized.parameterized.expand(success_params)
-    def test_open_readwrite_create_table(
+    def test_open_readwrite_create(
         self,
         name: str,
         mapping: CacheDictMapping,
         extra: Extra,
     ):
         c = CacheDict.open_readwrite(
-            path=f"{self.tmp_dir}/{name}.create.table.sqlite",
-            mapping=mapping,
-            create=ToCreate.TABLE,
-        )
-        self.assertNotEqual(c, None)
-
-    @parameterized.parameterized.expand(success_params)
-    def test_open_readwrite_create_db(
-        self,
-        name: str,
-        mapping: CacheDictMapping,
-        extra: Extra,
-    ):
-        c = CacheDict.open_readwrite(
-            path=f"{self.tmp_dir}/{name}.create.db.sqlite",
+            path=f"{self.tmp_dir}/{name}.create.sqlite",
             mapping=mapping,
             create=ToCreate.DATABASE,
         )
