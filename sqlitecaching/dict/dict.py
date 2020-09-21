@@ -10,25 +10,38 @@ from sqlitecaching.exceptions import SqliteCachingException
 
 log = logging.getLogger(__name__)
 
-CacheDictCategory = SqliteCachingException.register_category(
-    category_name=f"{__name__}.CacheDictCategory",
-    category_id=1,
-)
-__CDC = CacheDictCategory
+try:
+    _ = CacheDictCategory  # type: ignore
+    log.info("Not redefining exceptions")
+except NameError:
+    CacheDictCategory = SqliteCachingException.register_category(
+        category_name=f"{__name__}.CacheDictCategory",
+        category_id=1,
+    )
+    __CDC = CacheDictCategory
 
-CacheDictFilteredSqliteParamsException = __CDC.register_cause(
-    cause_name=f"{__name__}.CacheDictFilteredSqliteParamsException",
-    cause_id=0,
-    fmt="sqlite_params provided to CacheDict contained unsupported keys: [{filtered}]",
-    params=frozenset(["filtered"]),
-)
+    CacheDictFilteredSqliteParamsException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictFilteredSqliteParamsException",
+        cause_id=0,
+        fmt=(
+            "sqlite_params provided to CacheDict contained unsupported keys: "
+            "[{filtered}]"
+        ),
+        params=frozenset(["filtered"]),
+    )
 
-CacheDictReadOnlyException = __CDC.register_cause(
-    cause_name=f"{__name__}.CacheDictReadOnlyException",
-    cause_id=1,
-    fmt="attempting to perform [{op}] on readonly table [{table}]",
-    params=frozenset(["op", "table"]),
-)
+    CacheDictReadOnlyException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictReadOnlyException",
+        cause_id=1,
+        fmt="attempting to perform [{op}] on readonly table [{table}]",
+        params=frozenset(["op", "table"]),
+    )
+    CacheDictKeyTupleException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictKeyTupleException",
+        cause_id=2,
+        fmt="unable to create key tuple [{tuple_descr}] from input [{key_mapping}]",
+        params=frozenset(["tuple_descr", "key_mapping"]),
+    )
 
 
 @enum.unique
@@ -104,12 +117,56 @@ class CacheDict(UserDict):
         cursor = self.conn.execute(create_stmt)
         cursor.fetchone()
 
+    def clear_table(self) -> None:
+        if self.read_only:
+            raise CacheDictReadOnlyException(
+                {
+                    "op": "clear",
+                    "table": self.mapping.table_ident,
+                },
+            )
+        log.debug("delete table [%#0x]")
+        clear_stmt = self.mapping.clear_statement()
+        cursor = self.conn.execute(clear_stmt)
+        cursor.fetchone()
+
+    def delete_table(self) -> None:
+        if self.read_only:
+            raise CacheDictReadOnlyException(
+                {
+                    "op": "delete",
+                    "table": self.mapping.table_ident,
+                },
+            )
+        log.debug("delete table [%#0x]", id(self))
+        delete_stmt = self.mapping.delete_statement()
+        cursor = self.conn.execute(delete_stmt)
+        cursor.fetchone()
+
+    def get_value(self, key: typing.Mapping[str, typing.Any]) -> sqlite3.Row:
+        log.debug("get [%#0x] key: [%s]", id(self), key)
+        try:
+            key_tuple = self.mapping.KeyTuple(**key)
+        except TypeError as ex:
+            log.warn(
+                "failed to create key_tuple [%s] from key mapping [%s]",
+                self.mapping.KeyTuple._field_types,
+                key,
+                exc_info=True,
+            )
+            raise CacheDictKeyTupleException(
+                {
+                    "tuple_descr": self.mapping.KeyTuple._field_types,
+                    "key_mapping": key,
+                },
+            ) from ex
+        select_stmt = self.mapping.select_statement()
+        cursor = self.conn.execute(select_stmt, key_tuple)
+        row = cursor.fetchone()
+        return row
+
     def close(self) -> None:
-        log.info(
-            "closing [%#0x] conn: [%s]",
-            id(self),
-            self.conn,
-        )
+        log.info("closing [%#0x] conn: [%s]", id(self), self.conn)
         self._finalize()
 
     @classmethod
@@ -117,8 +174,11 @@ class CacheDict(UserDict):
         log.info("_finalize_instance [%#0x] conn: [%s]", id, conn)
         try:
             conn.close()
-        except Exception:
-            log.info("exception when closing conn: [%s]", conn, exc_info=True)
+        except Exception:  # pragma: no cover
+            # We don't really care what the exception is as we cannot do
+            # anything about it. If it's rethrown it will just be output
+            # to stderr
+            log.error("exception when closing conn: [%s]", conn, exc_info=True)
 
     @classmethod
     def _is_internally_constructed(

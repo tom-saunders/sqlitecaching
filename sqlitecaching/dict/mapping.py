@@ -9,63 +9,67 @@ from sqlitecaching.exceptions import SqliteCachingException
 log = logging.getLogger(__name__)
 
 
-CacheDictMappingCategory = SqliteCachingException.register_category(
-    category_name=f"{__name__}.CacheDictMappingCategory",
-    category_id=2,
-)
-__CDMC = CacheDictMappingCategory
+try:
+    _ = CacheDictMappingCategory  # type: ignore
+    log.info("Not redefining exceptions")
+except NameError:
+    CacheDictMappingCategory = SqliteCachingException.register_category(
+        category_name=f"{__name__}.CacheDictMappingCategory",
+        category_id=2,
+    )
+    __CDMC = CacheDictMappingCategory
 
-CacheDictMappingMissingKeysException = __CDMC.register_cause(
-    cause_name=f"{__name__}.MappingMissingKeys",
-    cause_id=0,
-    fmt="Mapping must have keys, provided: [{no_keys}]",
-    params=frozenset(["no_keys"]),
-)
-CacheDictMappingReservedTableException = __CDMC.register_cause(
-    cause_name=f"{__name__}.ReservedTableException",
-    cause_id=1,
-    fmt="table cannot start with sqlite_ : [{table_name}]",
-    params=frozenset(["table_name"]),
-)
-CacheDictMappingInvalidIdentifierException = __CDMC.register_cause(
-    cause_name=f"{__name__}.InvalidIdentifierException",
-    cause_id=2,
-    fmt="identifier provided: [{identifier}] does not match requirements [{re}]",
-    params=frozenset(["identifier", "re"]),
-)
-CacheDictMappingKeyValOverlapException = __CDMC.register_cause(
-    cause_name=f"{__name__}.KeyValColumnOverlapException",
-    cause_id=3,
-    fmt=(
-        "the sets of key columns and value columns must be disjoint. columns "
-        "[{columns}] occur in both key and value sets"
-    ),
-    params=frozenset(["columns"]),
-)
-CacheDictMappingNoIdentifierProvidedException = __CDMC.register_cause(
-    cause_name=f"{__name__}.NoIdentifierProvidedException",
-    cause_id=4,
-    fmt="The identifier provided: [{identifier}] does not have a value.",
-    params=frozenset(["identifier"]),
-)
-CacheDictMappingDuplicateKeysException = __CDMC.register_cause(
-    cause_name=f"{__name__}.DuplicateKeysException",
-    cause_id=5,
-    fmt="Duplicate key column identifiers provided: [{dups}]",
-    params=frozenset(["dups"]),
-)
-CacheDictMappingInvalidSQLTypeException = __CDMC.register_cause(
-    cause_name=f"{__name__}.InvalidSQLTypeException",
-    cause_id=6,
-    fmt="sqltype provided: [{sqltype}] does not match requirements [{re}]",
-    params=frozenset(["sqltype", "re"]),
-)
-CacheDictMappingDuplicateValuesException = __CDMC.register_cause(
-    cause_name=f"{__name__}.DuplicateValuesException",
-    cause_id=7,
-    fmt="Duplicate value column identifiers provided: [{dups}]",
-    params=frozenset(["dups"]),
-)
+    CacheDictMappingMissingKeysException = __CDMC.register_cause(
+        cause_name=f"{__name__}.MappingMissingKeys",
+        cause_id=0,
+        fmt="Mapping must have keys, provided: [{no_keys}]",
+        params=frozenset(["no_keys"]),
+    )
+    CacheDictMappingReservedTableException = __CDMC.register_cause(
+        cause_name=f"{__name__}.ReservedTableException",
+        cause_id=1,
+        fmt="table cannot start with sqlite_ : [{table_name}]",
+        params=frozenset(["table_name"]),
+    )
+    CacheDictMappingInvalidIdentifierException = __CDMC.register_cause(
+        cause_name=f"{__name__}.InvalidIdentifierException",
+        cause_id=2,
+        fmt="identifier provided: [{identifier}] does not match requirements [{re}]",
+        params=frozenset(["identifier", "re"]),
+    )
+    CacheDictMappingKeyValOverlapException = __CDMC.register_cause(
+        cause_name=f"{__name__}.KeyValColumnOverlapException",
+        cause_id=3,
+        fmt=(
+            "the sets of key columns and value columns must be disjoint. columns "
+            "[{columns}] occur in both key and value sets"
+        ),
+        params=frozenset(["columns"]),
+    )
+    CacheDictMappingNoIdentifierProvidedException = __CDMC.register_cause(
+        cause_name=f"{__name__}.NoIdentifierProvidedException",
+        cause_id=4,
+        fmt="The identifier provided: [{identifier}] does not have a value.",
+        params=frozenset(["identifier"]),
+    )
+    CacheDictMappingDuplicateKeysException = __CDMC.register_cause(
+        cause_name=f"{__name__}.DuplicateKeysException",
+        cause_id=5,
+        fmt="Duplicate key column identifiers provided: [{dups}]",
+        params=frozenset(["dups"]),
+    )
+    CacheDictMappingInvalidSQLTypeException = __CDMC.register_cause(
+        cause_name=f"{__name__}.InvalidSQLTypeException",
+        cause_id=6,
+        fmt="sqltype provided: [{sqltype}] does not match requirements [{re}]",
+        params=frozenset(["sqltype", "re"]),
+    )
+    CacheDictMappingDuplicateValuesException = __CDMC.register_cause(
+        cause_name=f"{__name__}.DuplicateValuesException",
+        cause_id=7,
+        fmt="Duplicate value column identifiers provided: [{dups}]",
+        params=frozenset(["dups"]),
+    )
 
 Ident = typing.NewType("Ident", str)
 IdentIn = typing.Union[Ident, str]
@@ -95,15 +99,20 @@ class CacheDictMapping:
     keys: ColMapping
     values: ColMapping
 
-    _create_statement: typing.Optional[SqlStatement]
-    _clear_statement: typing.Optional[SqlStatement]
-    _delete_statement: typing.Optional[SqlStatement]
-    _upsert_statement: typing.Optional[SqlStatement]
-    _remove_statement: typing.Optional[SqlStatement]
-    _length_statement: typing.Optional[SqlStatement]
-    _keys_statement: typing.Optional[SqlStatement]
-    _items_statement: typing.Optional[SqlStatement]
-    _values_statement: typing.Optional[SqlStatement]
+    KeyTuple: typing.Type
+    # ValueTuple: typing.Type
+    # ItemsTuple: typing.Type
+
+    _create_statement: typing.Optional[SqlStatement] = None
+    _clear_statement: typing.Optional[SqlStatement] = None
+    _delete_statement: typing.Optional[SqlStatement] = None
+    _upsert_statement: typing.Optional[SqlStatement] = None
+    _select_statement: typing.Optional[SqlStatement] = None
+    _remove_statement: typing.Optional[SqlStatement] = None
+    _length_statement: typing.Optional[SqlStatement] = None
+    _keys_statement: typing.Optional[SqlStatement] = None
+    _items_statement: typing.Optional[SqlStatement] = None
+    _values_statement: typing.Optional[SqlStatement] = None
 
     def __init__(
         self,
@@ -250,15 +259,36 @@ class CacheDictMapping:
             ident: col_info.sqltype for (ident, col_info) in value_columns.items()
         }
 
-        self._create_statement = None
-        self._clear_statement = None
-        self._delete_statement = None
-        self._upsert_statement = None
-        self._remove_statement = None
-        self._length_statement = None
-        self._keys_statement = None
-        self._items_statement = None
-        self._values_statement = None
+        key_cols = self.namedtuple_identifiers(key_columns)
+        # value_cols = self.namedtuple_identifiers(value_columns)
+        # items_cols = key_cols + value_cols
+
+        KeyTuple = typing.NamedTuple("KeyTuple", key_cols)  # type: ignore # noqa: N806
+        self.KeyTuple = KeyTuple
+
+        # ValueTuple = collections.namedtuple(  # type: ignore
+        #    "ValueTuple",
+        #    value_cols,
+        #    defaults = [None] * len(value_cols),  # type: ignore
+        # )
+        # self.ValueTuple = ValueTuple
+
+        # ItemsTuple = collections.namedtuple(  # type: ignore
+        #    "ItemsTuple",
+        #    items_cols,
+        #    defaults = [None] * len(value_cols),  # type: ignore
+        # )
+        # self.ItemsTuple = ItemsTuple
+
+    @staticmethod
+    def namedtuple_identifiers(
+        d: typing.Mapping[ValidIdent, ColInfo],
+        /,
+    ) -> typing.List[typing.Tuple[str, object]]:
+        quoted_keys = d.keys()
+        unquoted_keys = [k.replace("'", "") for k in quoted_keys]
+        sorted_keys = sorted(unquoted_keys)
+        return [(k, typing.Any) for k in sorted_keys]
 
     # fmt: off
     _CREATE_FMT: typing.ClassVar[str] = (
@@ -456,6 +486,52 @@ class CacheDictMapping:
         upsert_statement = SqlStatement("\n".join(upsert_lines))
         self._upsert_statement = upsert_statement
         return upsert_statement
+
+    # fmt: off
+    _SELECT_FMT: typing.ClassVar[str] = (
+        "-- sqlitecaching remove from table\n"
+        "SELECT (\n"
+        "   {value_columns}\n"
+        ") FROM {table_identifier}\n"
+        "WHERE (\n"
+        "    -- key columns\n"
+        "    {key_columns}\n"
+        ") = (\n"
+        "    -- key values\n"
+        "    {key_values}\n"
+        ");\n"
+    )
+    # fmt: on
+
+    def select_statement(self) -> SqlStatement:
+        if self._select_statement:
+            return self._select_statement
+
+        value_column_names = sorted(self.values.keys())
+        value_columns = ", -- value\n    ".join(value_column_names)
+        value_columns += " -- value"
+
+        key_column_names = sorted(self.keys.keys())
+        key_columns = ", -- key\n    ".join(key_column_names)
+        key_columns += " -- key"
+
+        key_columns_count = len(key_column_names)
+        key_values = ",\n    ".join(["?" for _ in range(0, key_columns_count)])
+        unstripped_select_statement = self._SELECT_FMT.format(
+            table_identifier=self.table_ident,
+            value_columns=value_columns,
+            key_columns=key_columns,
+            key_values=key_values,
+        )
+
+        select_lines = []
+        for line in unstripped_select_statement.splitlines():
+            select_lines.append(line.rstrip())
+        # needed for trailing newline
+        select_lines.append("")
+        select_statement = SqlStatement("\n".join(select_lines))
+        self._select_statement = select_statement
+        return select_statement
 
     # fmt: off
     _REMOVE_FMT: typing.ClassVar[str] = (

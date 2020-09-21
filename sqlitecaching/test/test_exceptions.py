@@ -35,7 +35,7 @@ class TestSqliteCachingException(SqliteCachingTestBase):
         category_name="TestDeletedCategory",
         category_id=TEST_DELETED_CATEGORY,
     )
-    del sqlitecaching.exceptions.CATEGORY_REG[CategoryID(TEST_DELETED_CATEGORY)]
+    del sqlitecaching.exceptions._CATEGORY_REG[CategoryID(TEST_DELETED_CATEGORY)]
 
     TestCauseException = TestCategory.register_cause(
         cause_name="TestCauseException",

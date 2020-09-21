@@ -31,6 +31,7 @@ class Action(typing.NamedTuple):
 
 
 class Extra(typing.NamedTuple):
+    sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None
     preexisting: typing.Optional[typing.Mapping[typing.Any, typing.Any]] = None
     actions: typing.Optional[typing.Iterable[Action]] = None
 
@@ -70,12 +71,18 @@ class TestCacheDictCreation(SqliteCachingTestBase):
 
     @parameterized.parameterized.expand(success_params)
     def test_open_anon_memory(self, name: str, mapping: CacheDictMapping, extra: Extra):
-        c = CacheDict.open_anon_memory(mapping=mapping)
+        c = CacheDict.open_anon_memory(
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
         self.assertNotEqual(c, None)
 
     @parameterized.parameterized.expand(success_params)
     def test_open_anon_disk(self, name: str, mapping: CacheDictMapping, extra: Extra):
-        c = CacheDict.open_anon_disk(mapping=mapping)
+        c = CacheDict.open_anon_disk(
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
         self.assertNotEqual(c, None)
 
     @parameterized.parameterized.expand(success_params)
@@ -83,6 +90,7 @@ class TestCacheDictCreation(SqliteCachingTestBase):
         c = CacheDict.open_readonly(
             path=f"{self.tmp_dir}/{name}.readonly.sqlite",
             mapping=mapping,
+            sqlite_params=extra.sqlite_params,
         )
         self.assertNotEqual(c, None)
 
@@ -91,6 +99,7 @@ class TestCacheDictCreation(SqliteCachingTestBase):
         c = CacheDict.open_readwrite(
             path=f"{self.tmp_dir}/{name}.readwrite.sqlite",
             mapping=mapping,
+            sqlite_params=extra.sqlite_params,
         )
         self.assertNotEqual(c, None)
 
@@ -105,6 +114,7 @@ class TestCacheDictCreation(SqliteCachingTestBase):
             path=f"{self.tmp_dir}/{name}.create.sqlite",
             mapping=mapping,
             create=ToCreate.DATABASE,
+            sqlite_params=extra.sqlite_params,
         )
         self.assertNotEqual(c, None)
 

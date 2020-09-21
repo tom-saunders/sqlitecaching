@@ -7,58 +7,61 @@ from sqlitecaching.exceptions import SqliteCachingException
 
 log = logging.getLogger(__name__)
 
+try:
+    _ = EnumCategory  # type: ignore
+    log.info("Not redefining exceptions")
+except NameError:
+    EnumCategory = SqliteCachingException.register_category(
+        category_name=f"{__name__}.EnumCategory",
+        category_id=3,
+    )
 
-EnumCategory = SqliteCachingException.register_category(
-    category_name=f"{__name__}.EnumCategory",
-    category_id=3,
-)
-
-EnumDuplicateValueException = EnumCategory.register_cause(
-    cause_name=f"{__name__}.EnumDuplicateValueException",
-    cause_id=0,
-    fmt=(
-        "duplicated value [{duplicated_value}] found in [{enum_name}] "
-        "duplicated between [{existing_name}] and  [{new_name}]"
-    ),
-    params=frozenset(
-        [
-            "duplicated_value",
-            "enum_name",
-            "existing_name",
-            "new_name",
-        ],
-    ),
-)
-EnumNameClashException = EnumCategory.register_cause(
-    cause_name=f"{__name__}.EnumNameClashException",
-    cause_id=1,
-    fmt=(
-        "clashing name found in [{enum_name}], clash between [{existing_name}] "
-        "and [{new_name}] (names are casefold()ed to [{casefolded_name}])"
-    ),
-    params=frozenset(
-        [
-            "enum_name",
-            "existing_name",
-            "new_name",
-            "casefolded_name",
-        ],
-    ),
-)
-EnumValueConversionException = EnumCategory.register_cause(
-    cause_name=f"{__name__}.EnumValueConversionException",
-    cause_id=2,
-    fmt=(
-        "unable to convert input [{to_convert}] into a [{enum_name}] - no matching "
-        "value found"
-    ),
-    params=frozenset(
-        [
-            "to_convert",
-            "enum_name",
-        ],
-    ),
-)
+    EnumDuplicateValueException = EnumCategory.register_cause(
+        cause_name=f"{__name__}.EnumDuplicateValueException",
+        cause_id=0,
+        fmt=(
+            "duplicated value [{duplicated_value}] found in [{enum_name}] "
+            "duplicated between [{existing_name}] and  [{new_name}]"
+        ),
+        params=frozenset(
+            [
+                "duplicated_value",
+                "enum_name",
+                "existing_name",
+                "new_name",
+            ],
+        ),
+    )
+    EnumNameClashException = EnumCategory.register_cause(
+        cause_name=f"{__name__}.EnumNameClashException",
+        cause_id=1,
+        fmt=(
+            "clashing name found in [{enum_name}], clash between [{existing_name}] "
+            "and [{new_name}] (names are casefold()ed to [{casefolded_name}])"
+        ),
+        params=frozenset(
+            [
+                "enum_name",
+                "existing_name",
+                "new_name",
+                "casefolded_name",
+            ],
+        ),
+    )
+    EnumValueConversionException = EnumCategory.register_cause(
+        cause_name=f"{__name__}.EnumValueConversionException",
+        cause_id=2,
+        fmt=(
+            "unable to convert input [{to_convert}] into a [{enum_name}] - no matching "
+            "value found"
+        ),
+        params=frozenset(
+            [
+                "to_convert",
+                "enum_name",
+            ],
+        ),
+    )
 
 T = typing.TypeVar("T", bound="LevelledEnum")
 
