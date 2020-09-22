@@ -1,5 +1,6 @@
 import enum
 import logging
+import os
 import shutil
 import sqlite3
 import tempfile
@@ -44,10 +45,10 @@ class Def(typing.NamedTuple):
 
 @test_level(TestLevel.PRE_COMMIT)
 class TestCacheDictCreation(SqliteCachingTestBase):
-    tmp_dir: int
+    tmp_dir: str
 
     def setUp(self):
-        self.tmp_dir = tempfile.mkdtemp(prefix=".test_tmp")
+        self.tmp_dir = tempfile.mkdtemp(dir=os.getcwd(), prefix=".test_tmp")
         shutil.copytree(
             f"{self.res_dir}/dicts/",
             f"{self.tmp_dir}/",
