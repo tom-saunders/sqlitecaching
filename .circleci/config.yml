@@ -251,7 +251,8 @@ jobs:
                                 --output-dir ~/circleci-sqlitecache/test-results/unittest \
                                 --log-level info \
                                 --test-log-level debug \
-                                --test-level full
+                                --test-level full \
+                                || true
                         when: always
                     - run:
                         name: report coverage
@@ -264,6 +265,20 @@ jobs:
                             - circleci-sqlitecache/test-results/unittest/
             - store_test_artifacts:
                 test_name: "unittest"
+
+    store_artifacts:
+        working_directory: ~/circleci-sqlitecache
+        docker:
+            - image: circleci/python:3.8.5
+        environment:
+            PIPENV_VENV_IN_PROJECT: true
+            GIT_LFS_SKIP_SMUDGE: 1
+        steps:
+            - common_setup:
+                after_setup:
+                    - run: "echo store artifacts"
+            - store_test_artifacts:
+                test_name: ""
 
 workflows:
     version: 2
@@ -293,3 +308,9 @@ workflows:
                     - get_code
                     - get_lfs
                     - get_venv
+            - store_artifacts:
+                requires:
+                    - run_flake8
+                    - run_flake8-fixme
+                    - run_black
+                    - run_tests

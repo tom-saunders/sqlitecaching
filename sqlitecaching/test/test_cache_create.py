@@ -96,6 +96,7 @@ class TestCacheDictCreation(SqliteCachingTestBase):
 
     @parameterized.parameterized.expand(success_params)
     def test_open_readwrite(self, name: str, mapping: CacheDictMapping, extra: Extra):
+        print(f"{self.tmp_dir}/{name}.readwrite.sqlite")
         c = CacheDict.open_readwrite(
             path=f"{self.tmp_dir}/{name}.readwrite.sqlite",
             mapping=mapping,
