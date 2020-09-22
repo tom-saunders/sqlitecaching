@@ -489,9 +489,9 @@ class CacheDictMapping:
 
     # fmt: off
     _SELECT_FMT: typing.ClassVar[str] = (
-        "-- sqlitecaching remove from table\n"
+        "-- sqlitecaching retrieve from table\n"
         "SELECT (\n"
-        "   {value_columns}\n"
+        "    {value_columns}\n"
         ") FROM {table_identifier}\n"
         "WHERE (\n"
         "    -- key columns\n"
@@ -508,8 +508,11 @@ class CacheDictMapping:
             return self._select_statement
 
         value_column_names = sorted(self.values.keys())
-        value_columns = ", -- value\n    ".join(value_column_names)
-        value_columns += " -- value"
+        if value_column_names:
+            value_columns = ", -- value\n    ".join(value_column_names)
+            value_columns += " -- value"
+        else:
+            value_columns = "null -- no value columns so use null"
 
         key_column_names = sorted(self.keys.keys())
         key_columns = ", -- key\n    ".join(key_column_names)

@@ -66,6 +66,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         "clear_statement",
         "delete_statement",
         "upsert_statement",
+        "select_statement",
         "remove_statement",
         "length_statement",
         "keys_statement",
