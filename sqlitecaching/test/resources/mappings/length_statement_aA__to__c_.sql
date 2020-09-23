@@ -1,2 +1,2 @@
 -- sqlitecaching table length
-SELECT COUNT(*) FROM 'aa__c_';
+SELECT COUNT(*) FROM "aa__c_";

@@ -1,8 +1,8 @@
 -- sqlitecaching insert or update into table
-INSERT INTO 'aa'
+INSERT INTO "aa"
 (
     -- all columns
-    'a' -- key
+    "a" -- key
     -- no values defined
 ) VALUES (
     -- all values

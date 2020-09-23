@@ -1,11 +1,11 @@
 -- sqlitecaching create table
-CREATE TABLE 'aa__bb'
+CREATE TABLE IF NOT EXISTS "aa__bb"
 (
     -- keys
-    'a' A, -- primary key
+    "a" A, -- primary key
     -- values
-    'b' B, -- value
+    "b" B, -- value
     PRIMARY KEY (
-        'a'
+        "a"
     ) ON CONFLICT ABORT
 );

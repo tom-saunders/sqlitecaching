@@ -1,2 +1,2 @@
 -- sqlitecaching delete table
-DROP TABLE 'a___cc';
+DROP TABLE "a___cc";

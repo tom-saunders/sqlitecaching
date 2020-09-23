@@ -100,8 +100,8 @@ class CacheDictMapping:
     values: ColMapping
 
     KeyTuple: typing.Type
-    # ValueTuple: typing.Type
-    # ItemsTuple: typing.Type
+    ValueTuple: typing.Type
+    ItemsTuple: typing.Type
 
     _create_statement: typing.Optional[SqlStatement] = None
     _clear_statement: typing.Optional[SqlStatement] = None
@@ -140,7 +140,7 @@ class CacheDictMapping:
             }
 
         validated_table = self._validate_identifier(identifier=_table)
-        if validated_table.startswith("'sqlite_"):
+        if validated_table.startswith('"sqlite_'):
             raise CacheDictMappingReservedTableException(
                 {"table_name": validated_table},
             )
@@ -214,10 +214,10 @@ class CacheDictMapping:
         if dup_value_columns:
             val_strs: typing.List[str] = []
             for (key, val) in dup_value_columns.items():
-                dup_idents = "', '".join(val.clashes)
+                dup_idents = '", "'.join(val.clashes)
                 val_str = (
                     f"column [{key}] (input [{val.original}]) clashes with "
-                    f"['{dup_idents}']"
+                    f'["{dup_idents}"]'
                 )
                 val_strs.append(val_str)
             dup_val_str = ", ".join(val_strs)
@@ -226,7 +226,7 @@ class CacheDictMapping:
             )
 
         if keyval_columns:
-            keyval_str = "'" + "', '".join(keyval_columns) + "'"
+            keyval_str = '"' + '", "'.join(keyval_columns) + '"'
             ex = CacheDictMappingKeyValOverlapException({"columns": keyval_str})
             ex.__cause__ = to_raise
             to_raise = ex
@@ -234,10 +234,10 @@ class CacheDictMapping:
         if dup_key_columns:
             key_strs: typing.List[str] = []
             for (key, val) in dup_key_columns.items():
-                dup_idents = "', '".join(val.clashes)
+                dup_idents = '", "'.join(val.clashes)
                 key_str = (
                     f"column [{key}] (input [{val.original}]) clashes with "
-                    f"['{dup_idents}']"
+                    f'["{dup_idents}"]'
                 )
                 key_strs.append(key_str)
             dup_key_str = ", ".join(key_strs)
@@ -260,25 +260,23 @@ class CacheDictMapping:
         }
 
         key_cols = self.namedtuple_identifiers(key_columns)
-        # value_cols = self.namedtuple_identifiers(value_columns)
-        # items_cols = key_cols + value_cols
+        value_cols = self.namedtuple_identifiers(value_columns)
+        items_cols = key_cols + value_cols
 
         KeyTuple = typing.NamedTuple("KeyTuple", key_cols)  # type: ignore # noqa: N806
         self.KeyTuple = KeyTuple
 
-        # ValueTuple = collections.namedtuple(  # type: ignore
-        #    "ValueTuple",
-        #    value_cols,
-        #    defaults = [None] * len(value_cols),  # type: ignore
-        # )
-        # self.ValueTuple = ValueTuple
+        ValueTuple = typing.NamedTuple(  # type: ignore # noqa: N806
+            "ValueTuple",
+            value_cols,
+        )
+        self.ValueTuple = ValueTuple
 
-        # ItemsTuple = collections.namedtuple(  # type: ignore
-        #    "ItemsTuple",
-        #    items_cols,
-        #    defaults = [None] * len(value_cols),  # type: ignore
-        # )
-        # self.ItemsTuple = ItemsTuple
+        ItemsTuple = typing.NamedTuple(  # type: ignore # noqa: N806
+            "ItemsTuple",
+            items_cols,
+        )
+        self.ItemsTuple = ItemsTuple
 
     @staticmethod
     def namedtuple_identifiers(
@@ -286,14 +284,14 @@ class CacheDictMapping:
         /,
     ) -> typing.List[typing.Tuple[str, object]]:
         quoted_keys = d.keys()
-        unquoted_keys = [k.replace("'", "") for k in quoted_keys]
+        unquoted_keys = [k.replace('"', "") for k in quoted_keys]
         sorted_keys = sorted(unquoted_keys)
         return [(k, typing.Any) for k in sorted_keys]
 
     # fmt: off
     _CREATE_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching create table\n"
-        "CREATE TABLE {table_identifier}\n"
+        "CREATE TABLE IF NOT EXISTS {table_identifier}\n"
         "(\n"
         "    -- keys\n"
         "    {key_column_definitions}\n"
@@ -490,9 +488,9 @@ class CacheDictMapping:
     # fmt: off
     _SELECT_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching retrieve from table\n"
-        "SELECT (\n"
+        "SELECT\n"
         "    {value_columns}\n"
-        ") FROM {table_identifier}\n"
+        "FROM {table_identifier}\n"
         "WHERE (\n"
         "    -- key columns\n"
         "    {key_columns}\n"
@@ -770,7 +768,7 @@ class CacheDictMapping:
                 lower_identifier,
             )
 
-        return ValidIdent(f"'{lower_identifier}'")
+        return ValidIdent(f'"{lower_identifier}"')
 
     @classmethod
     def _validate_sqltype(cls, *, sqltype: typing.Optional[SqlType]) -> ValidSqlType:

@@ -1,4 +1,4 @@
 -- sqlitecaching table keys
 SELECT
-    'a' -- key
-FROM 'aa';
+    "a" -- key
+FROM "aa";

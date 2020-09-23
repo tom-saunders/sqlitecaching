@@ -1,4 +1,4 @@
 -- sqlitecaching table values
 SELECT
-    'c' -- value
-FROM 'aa__c_';
+    "c" -- value
+FROM "aa__c_";

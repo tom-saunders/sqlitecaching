@@ -3,7 +3,7 @@ import logging
 import sqlite3
 import typing
 import weakref
-from collections import UserDict
+from collections.abc import MutableMapping
 
 from sqlitecaching.dict.mapping import CacheDictMapping
 from sqlitecaching.exceptions import SqliteCachingException
@@ -41,6 +41,21 @@ except NameError:
         cause_id=2,
         fmt="unable to create key tuple [{tuple_descr}] from input [{key_mapping}]",
         params=frozenset(["tuple_descr", "key_mapping"]),
+        additional_excepts=frozenset([TypeError]),
+    )
+    CacheDictNoSuchKeyException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictNoSuchKeyException",
+        cause_id=3,
+        fmt="key [{key_tuple}] not present in table [{table}]",
+        params=frozenset(["key_tuple", "table"]),
+        additional_excepts=frozenset([KeyError]),
+    )
+    CacheDictValueTupleException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictValueTupleException",
+        cause_id=4,
+        fmt="unable to create value tuple [{tuple_descr}] from input [{value_mapping}]",
+        params=frozenset(["tuple_descr", "value_mapping"]),
+        additional_excepts=frozenset([TypeError]),
     )
 
 
@@ -50,7 +65,11 @@ class ToCreate(enum.Enum):
     DATABASE = enum.auto()
 
 
-class CacheDict(UserDict):
+KT = typing.TypeVar("KT")
+VT = typing.TypeVar("VT")
+
+
+class CacheDict(MutableMapping, typing.Generic[KT, VT]):
     _internally_constructed: typing.ClassVar[typing.Any] = object()
     _raise_on_filtered_sqlite_params: typing.ClassVar[bool] = False
 
@@ -143,7 +162,32 @@ class CacheDict(UserDict):
         cursor = self.conn.execute(delete_stmt)
         cursor.fetchone()
 
-    def get_value(self, key: typing.Mapping[str, typing.Any]) -> sqlite3.Row:
+    def __len__(self) -> int:
+        log.debug("len [%#0x]", id(self))
+        length_stmt = self.mapping.length_statement()
+        cursor = self.conn.execute(length_stmt)
+        row = cursor.fetchone()
+        return row[0]
+
+    def __delitem__(self, key: typing.Mapping[str, typing.Any], /) -> None:
+        log.debug("delete [%#0x] key: [%s]", id(self), key)
+        try:
+            _ = self.__getitem__(key)
+        except Exception:
+            log.debug(
+                "exception getting [%s], cannot delete in [%#0x]",
+                key,
+                id(self),
+                exc_info=True,
+            )
+            raise
+        else:
+            key_tuple = self.mapping.KeyTuple(**key)
+            remove_stmt = self.mapping.remove_statement()
+            cursor = self.conn.execute(remove_stmt, key_tuple)
+            cursor.fetchone()
+
+    def __contains__(self, key, /) -> bool:
         log.debug("get [%#0x] key: [%s]", id(self), key)
         try:
             key_tuple = self.mapping.KeyTuple(**key)
@@ -163,11 +207,99 @@ class CacheDict(UserDict):
         select_stmt = self.mapping.select_statement()
         cursor = self.conn.execute(select_stmt, key_tuple)
         row = cursor.fetchone()
+        if row:
+            return True
+        else:
+            return False
+
+    def __getitem__(self, key: typing.Mapping[str, typing.Any], /) -> sqlite3.Row:
+        log.debug("get [%#0x] key: [%s]", id(self), key)
+        try:
+            key_tuple = self.mapping.KeyTuple(**key)
+        except TypeError as ex:
+            log.warn(
+                "failed to create key_tuple [%s] from key mapping [%s]",
+                self.mapping.KeyTuple._field_types,
+                key,
+                exc_info=True,
+            )
+            raise CacheDictKeyTupleException(
+                {
+                    "tuple_descr": self.mapping.KeyTuple._field_types,
+                    "key_mapping": key,
+                },
+            ) from ex
+        select_stmt = self.mapping.select_statement()
+        cursor = self.conn.execute(select_stmt, key_tuple)
+        row = cursor.fetchone()
+        if not row:
+            raise CacheDictNoSuchKeyException(
+                {"key_tuple": key_tuple, "table": self.mapping.table_ident},
+            )
         return row
 
     def close(self) -> None:
         log.info("closing [%#0x] conn: [%s]", id(self), self.conn)
         self._finalize()
+
+    def __iter__(self) -> typing.Generator[sqlite3.Row, None, None]:
+        keys_stmt = self.mapping.keys_statement()
+        cursor = self.conn.execute(keys_stmt)
+        row = cursor.fetchone()
+        while row:
+            yield row
+            row = cursor.fetchone()
+
+    def __setitem__(
+        self,
+        key: typing.Mapping[str, typing.Any],
+        value: typing.Mapping[str, typing.Any],
+        /,
+    ) -> None:
+        log.debug("set [%#0x] key: [%s] value: [%s]", id(self), key, value)
+        try:
+            key_tuple = self.mapping.KeyTuple(**key)
+        except TypeError as ex:
+            log.warning(
+                "failed to create key_tuple [%s] from key mapping [%s]",
+                self.mapping.KeyTuple._field_types,
+                key,
+                exc_info=True,
+            )
+            raise CacheDictKeyTupleException(
+                {
+                    "tuple_descr": self.mapping.KeyTuple._field_types,
+                    "key_mapping": key,
+                },
+            ) from ex
+        try:
+            if value:
+                value_tuple = self.mapping.ValueTuple(**value)
+            else:
+                value_tuple = self.mapping.ValueTuple()
+        except TypeError as ex:
+            log.warning(
+                "failed to create value_tuple [%s] from value mapping [%s]",
+                self.mapping.ValueTuple._field_types,
+                value,
+                exc_info=True,
+            )
+            raise CacheDictValueTupleException(
+                {
+                    "tuple_descr": self.mapping.ValueTuple._field_types,
+                    "value_mapping": value,
+                },
+            ) from ex
+
+        upsert_stmt = self.mapping.upsert_statement()
+        cursor = self.conn.execute(upsert_stmt, *key_tuple, *value_tuple)
+        try:
+            cursor.fetchone()
+        except Exception:
+            # TODO ???
+            # raise ???
+            log.warning("exception from upsert", exc_info=True)
+            raise
 
     @classmethod
     def _finalize_instance(cls, *, id: int, conn: sqlite3.Connection) -> None:
@@ -255,15 +387,17 @@ class CacheDict(UserDict):
         cls,
         *,
         mapping: CacheDictMapping,
+        key_tuple: typing.Type[KT],
+        value_tuple: typing.Type[VT],
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
-    ) -> "CacheDict":
+    ) -> "CacheDict[KT, VT]":
         log.info("open anon memory")
 
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params)
 
         conn = cls._open_connection(database=cls.ANON_MEM_PATH, **cleaned_sqlite_params)
 
-        cache_dict = CacheDict(
+        cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
             _cd_internal_flag=cls._internally_constructed,
@@ -276,8 +410,10 @@ class CacheDict(UserDict):
         cls,
         *,
         mapping: CacheDictMapping,
+        key_tuple: typing.Type[KT],
+        value_tuple: typing.Type[VT],
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
-    ) -> "CacheDict":
+    ) -> "CacheDict[KT, VT]":
         log.info("open anon disk")
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params)
 
@@ -286,7 +422,7 @@ class CacheDict(UserDict):
             **cleaned_sqlite_params,
         )
 
-        cache_dict = CacheDict(
+        cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
             _cd_internal_flag=cls._internally_constructed,
@@ -301,8 +437,10 @@ class CacheDict(UserDict):
         *,
         path: str,
         mapping: CacheDictMapping,
+        key_tuple: typing.Type[KT],
+        value_tuple: typing.Type[VT],
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
-    ) -> "CacheDict":
+    ) -> "CacheDict[KT, VT]":
         log.info("open readonly")
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params)
 
@@ -313,7 +451,7 @@ class CacheDict(UserDict):
             **cleaned_sqlite_params,
         )
 
-        cache_dict = CacheDict(
+        cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
             read_only=True,
@@ -328,9 +466,11 @@ class CacheDict(UserDict):
         *,
         path: str,
         mapping: CacheDictMapping,
+        key_tuple: typing.Type[KT],
+        value_tuple: typing.Type[VT],
         create: typing.Optional[ToCreate] = ToCreate.NONE,
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
-    ) -> "CacheDict":
+    ) -> "CacheDict[KT, VT]":
         log.info("open readwrite create: [%s]", create)
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params)
 
@@ -344,7 +484,7 @@ class CacheDict(UserDict):
             **cleaned_sqlite_params,
         )
 
-        cache_dict = CacheDict(
+        cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
             _cd_internal_flag=cls._internally_constructed,
@@ -358,12 +498,14 @@ class CacheDict(UserDict):
         *,
         conn: sqlite3.Connection,
         mapping: CacheDictMapping,
-    ) -> "CacheDict":
+        key_tuple: typing.Type[KT],
+        value_tuple: typing.Type[VT],
+    ) -> "CacheDict[KT, VT]":
         log.warning(
             "creating CacheDict from existing connection may lead to "
             "unexpected behaviour",
         )
-        cache_dict = CacheDict(
+        cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
             _cd_internal_flag=cls._internally_constructed,

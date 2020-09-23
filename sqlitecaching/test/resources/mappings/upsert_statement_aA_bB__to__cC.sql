@@ -1,10 +1,10 @@
 -- sqlitecaching insert or update into table
-INSERT INTO 'aa_bb__cc'
+INSERT INTO "aa_bb__cc"
 (
     -- all columns
-    'a', -- key
-    'b', -- key
-    'c' -- value
+    "a", -- key
+    "b", -- key
+    "c" -- value
 ) VALUES (
     -- all values
     ?,
@@ -12,13 +12,13 @@ INSERT INTO 'aa_bb__cc'
     ?
 ) ON CONFLICT (
     -- key columns
-    'a', -- key
-    'b' -- key
+    "a", -- key
+    "b" -- key
 ) DO UPDATE SET (
     -- value columns
-    'c' -- value
+    "c" -- value
 ) = (
     -- value values
-    excluded.'c' -- value
+    excluded."c" -- value
 )
 ;

@@ -52,10 +52,15 @@ class ExceptProvider(typing.Generic[T]):
         category_id: CategoryID,
         cause_id: CauseID,
         cause_name: Name,
+        additional_excepts: typing.Optional[
+            typing.FrozenSet[typing.Type[Exception]]
+        ] = None,
     ):
+        if not additional_excepts:
+            additional_excepts = frozenset([])
         self.subcls = type(
             str(cause_name),
-            (except_cls,),
+            (except_cls, *additional_excepts),
             {},
         )
 
@@ -100,16 +105,20 @@ class CategoryProvider(typing.Generic[T]):
         cause_id: CauseInt,
         fmt: FormatStr,
         params: ParamSet,
+        additional_excepts: typing.Optional[
+            typing.FrozenSet[typing.Type[Exception]]
+        ] = None,
     ) -> ExceptProvider[T]:
         cause_id = CauseID(cause_id)
         cause_name = Name(cause_name)
         fmt = Format(fmt)
         log.info(
-            "registering cause [%s] for category [%d (%s)] with id [%d]",
+            "registering cause [%s] for category [%d (%s)] with id [%d] (+ [%s])",
             cause_name,
             self.id,
             self.name,
             cause_id,
+            additional_excepts,
         )
 
         category = _CATEGORY_REG.get(self.id, None)
@@ -150,6 +159,7 @@ class CategoryProvider(typing.Generic[T]):
             category_id=self.id,
             cause_id=cause_id,
             cause_name=cause_name,
+            additional_excepts=additional_excepts,
         )
 
 

@@ -1,2 +1,2 @@
 -- sqlitecaching clear table
-DELETE from 'aa__c_';
+DELETE from "aa__c_";

@@ -1,10 +1,10 @@
 -- sqlitecaching retrieve from table
-SELECT (
-    'c' -- value
-) FROM 'aa__c_'
+SELECT
+    "c" -- value
+FROM "aa__c_"
 WHERE (
     -- key columns
-    'a' -- key
+    "a" -- key
 ) = (
     -- key values
     ?

@@ -1,8 +1,8 @@
 -- sqlitecaching remove from table
-DELETE FROM 'a___cc'
+DELETE FROM "a___cc"
 WHERE (
     -- key columns
-    'a' -- key
+    "a" -- key
 ) = (
     -- key values
     ?
