@@ -1,9 +1,9 @@
 import enum
+import functools
 import logging
 import sqlite3
 import typing
 import weakref
-from collections.abc import MutableMapping
 
 from sqlitecaching.dict.mapping import CacheDictMapping
 from sqlitecaching.exceptions import SqliteCachingException
@@ -36,25 +36,25 @@ except NameError:
         fmt="attempting to perform [{op}] on readonly table [{table}]",
         params=frozenset(["op", "table"]),
     )
-    CacheDictKeyTupleException = __CDC.register_cause(
-        cause_name=f"{__name__}.CacheDictKeyTupleException",
+    CacheDictKeyTypeException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictKeyTypeException",
         cause_id=2,
-        fmt="unable to create key tuple [{tuple_descr}] from input [{key_mapping}]",
-        params=frozenset(["tuple_descr", "key_mapping"]),
+        fmt="key [{key}] has incorrect type [{key_type}] (expected KT: [{KT}])",
+        params=frozenset(["key", "key_type", "KT"]),
         additional_excepts=frozenset([TypeError]),
     )
     CacheDictNoSuchKeyException = __CDC.register_cause(
         cause_name=f"{__name__}.CacheDictNoSuchKeyException",
         cause_id=3,
-        fmt="key [{key_tuple}] not present in table [{table}]",
-        params=frozenset(["key_tuple", "table"]),
+        fmt="key [{key}] not present in table [{table}]",
+        params=frozenset(["key", "table"]),
         additional_excepts=frozenset([KeyError]),
     )
-    CacheDictValueTupleException = __CDC.register_cause(
-        cause_name=f"{__name__}.CacheDictValueTupleException",
+    CacheDictValueTypeException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictValueTypeException",
         cause_id=4,
-        fmt="unable to create value tuple [{tuple_descr}] from input [{value_mapping}]",
-        params=frozenset(["tuple_descr", "value_mapping"]),
+        fmt="value [{value}] has incorrect type [{value_type}] (expected VT: [{VT}]",
+        params=frozenset(["value", "value_type", "VT"]),
         additional_excepts=frozenset([TypeError]),
     )
 
@@ -69,7 +69,15 @@ KT = typing.TypeVar("KT")
 VT = typing.TypeVar("VT")
 
 
-class CacheDict(MutableMapping, typing.Generic[KT, VT]):
+class Metadata(typing.NamedTuple):
+    key_tuple: typing.Type
+    key_columns: typing.FrozenSet[str]
+    value_tuple: typing.Type
+    value_columns: typing.FrozenSet[str]
+    count_column: str
+
+
+class CacheDict(typing.Mapping[KT, VT]):
     _internally_constructed: typing.ClassVar[typing.Any] = object()
     _raise_on_filtered_sqlite_params: typing.ClassVar[bool] = False
 
@@ -112,12 +120,23 @@ class CacheDict(MutableMapping, typing.Generic[KT, VT]):
         self._is_internally_constructed(**kwargs)
 
         self.conn = conn
+        metadata = Metadata(
+            mapping.KeyTuple,
+            frozenset(mapping.KeyTuple._fields),
+            mapping.ValueTuple,
+            frozenset(mapping.ValueTuple._fields),
+            "COUNT(*)",
+        )
+        self.conn.row_factory = functools.partial(
+            self._tuple_factory,
+            metadata=metadata,
+        )
         self.mapping = mapping
         self.read_only = read_only
 
         if not read_only:
             # creating the mapped table should be idempotent
-            # (CREATE TABLE ... IF NOT EXIST ...)
+            # (CREATE TABLE IF NOT EXIST ...)
             # but obviously doesn't work for readonly connections
             self.create_table()
 
@@ -167,10 +186,18 @@ class CacheDict(MutableMapping, typing.Generic[KT, VT]):
         length_stmt = self.mapping.length_statement()
         cursor = self.conn.execute(length_stmt)
         row = cursor.fetchone()
-        return row[0]
+        return row["c"]
 
-    def __delitem__(self, key: typing.Mapping[str, typing.Any], /) -> None:
+    def __delitem__(self, key: KT, /) -> None:
         log.debug("delete [%#0x] key: [%s]", id(self), key)
+        if not isinstance(key, self.mapping.KeyTuple):
+            raise CacheDictKeyTypeException(
+                {
+                    "key": key,
+                    "key_type": type(key),
+                    "KT": self.mapping.KeyTuple._field_types,
+                },
+            )
         try:
             _ = self.__getitem__(key)
         except Exception:
@@ -182,117 +209,89 @@ class CacheDict(MutableMapping, typing.Generic[KT, VT]):
             )
             raise
         else:
-            key_tuple = self.mapping.KeyTuple(**key)
             remove_stmt = self.mapping.remove_statement()
-            cursor = self.conn.execute(remove_stmt, key_tuple)
+            cursor = self.conn.execute(remove_stmt, key)
             cursor.fetchone()
 
     def __contains__(self, key, /) -> bool:
         log.debug("get [%#0x] key: [%s]", id(self), key)
-        try:
-            key_tuple = self.mapping.KeyTuple(**key)
-        except TypeError as ex:
-            log.warn(
-                "failed to create key_tuple [%s] from key mapping [%s]",
-                self.mapping.KeyTuple._field_types,
-                key,
-                exc_info=True,
-            )
-            raise CacheDictKeyTupleException(
+        if not isinstance(key, self.mapping.KeyTuple):
+            raise CacheDictKeyTypeException(
                 {
-                    "tuple_descr": self.mapping.KeyTuple._field_types,
-                    "key_mapping": key,
+                    "key": key,
+                    "key_type": type(key),
+                    "KT": self.mapping.KeyTuple._field_types,
                 },
-            ) from ex
+            )
         select_stmt = self.mapping.select_statement()
-        cursor = self.conn.execute(select_stmt, key_tuple)
-        row = cursor.fetchone()
+        cursor = self.conn.execute(select_stmt, key)
+        row = cursor.fetchone()["v"]
         if row:
             return True
         else:
             return False
 
-    def __getitem__(self, key: typing.Mapping[str, typing.Any], /) -> sqlite3.Row:
+    def __getitem__(self, key: KT, /) -> VT:
         log.debug("get [%#0x] key: [%s]", id(self), key)
-        try:
-            key_tuple = self.mapping.KeyTuple(**key)
-        except TypeError as ex:
-            log.warn(
-                "failed to create key_tuple [%s] from key mapping [%s]",
-                self.mapping.KeyTuple._field_types,
-                key,
-                exc_info=True,
-            )
-            raise CacheDictKeyTupleException(
+        if not isinstance(key, self.mapping.KeyTuple):
+            raise CacheDictKeyTypeException(
                 {
-                    "tuple_descr": self.mapping.KeyTuple._field_types,
-                    "key_mapping": key,
+                    "key": key,
+                    "key_type": type(key),
+                    "KT": self.mapping.KeyTuple._field_types,
                 },
-            ) from ex
+            )
         select_stmt = self.mapping.select_statement()
-        cursor = self.conn.execute(select_stmt, key_tuple)
+        cursor = self.conn.execute(select_stmt, key)
         row = cursor.fetchone()
         if not row:
             raise CacheDictNoSuchKeyException(
-                {"key_tuple": key_tuple, "table": self.mapping.table_ident},
+                {"key": key, "table": self.mapping.table_ident},
             )
-        return row
+        elif not row["v"]:
+            raise Exception()
+        return row["v"]
 
     def close(self) -> None:
         log.info("closing [%#0x] conn: [%s]", id(self), self.conn)
         self._finalize()
 
-    def __iter__(self) -> typing.Generator[sqlite3.Row, None, None]:
+    def __iter__(self) -> typing.Iterator[KT]:
         keys_stmt = self.mapping.keys_statement()
         cursor = self.conn.execute(keys_stmt)
-        row = cursor.fetchone()
+        row = cursor.fetchone()["k"]
         while row:
             yield row
-            row = cursor.fetchone()
+            row = cursor.fetchone()["k"]
 
     def __setitem__(
         self,
-        key: typing.Mapping[str, typing.Any],
-        value: typing.Mapping[str, typing.Any],
+        key: KT,
+        value: VT,
         /,
     ) -> None:
         log.debug("set [%#0x] key: [%s] value: [%s]", id(self), key, value)
-        try:
-            key_tuple = self.mapping.KeyTuple(**key)
-        except TypeError as ex:
-            log.warning(
-                "failed to create key_tuple [%s] from key mapping [%s]",
-                self.mapping.KeyTuple._field_types,
-                key,
-                exc_info=True,
-            )
-            raise CacheDictKeyTupleException(
+        if not isinstance(key, self.mapping.KeyTuple):
+            raise CacheDictKeyTypeException(
                 {
-                    "tuple_descr": self.mapping.KeyTuple._field_types,
-                    "key_mapping": key,
+                    "key": key,
+                    "key_type": type(key),
+                    "KT": self.mapping.KeyTuple._field_types,
                 },
-            ) from ex
-        try:
-            if value:
-                value_tuple = self.mapping.ValueTuple(**value)
-            else:
-                value_tuple = self.mapping.ValueTuple()
-        except TypeError as ex:
-            log.warning(
-                "failed to create value_tuple [%s] from value mapping [%s]",
-                self.mapping.ValueTuple._field_types,
-                value,
-                exc_info=True,
             )
-            raise CacheDictValueTupleException(
-                {
-                    "tuple_descr": self.mapping.ValueTuple._field_types,
-                    "value_mapping": value,
-                },
-            ) from ex
-
+        if value:
+            if not isinstance(value, self.mapping.ValueTuple):
+                raise CacheDictValueTypeException(
+                    {
+                        "value": value,
+                        "value_type": type(value),
+                        "VT": self.mapping.ValueTuple._field_types,
+                    },
+                )
+        else:
+            value = self.mapping.ValueTuple()
         upsert_stmt = self.mapping.upsert_statement()
-        cursor = self.conn.execute(upsert_stmt, *key_tuple, *value_tuple)
+        cursor = self.conn.execute(upsert_stmt, (*key, *value))
         try:
             cursor.fetchone()
         except Exception:
@@ -373,13 +372,37 @@ class CacheDict(MutableMapping, typing.Generic[KT, VT]):
             raise CacheDictFilteredSqliteParamsException({"filtered": filtered_params})
         return cleaned_params
 
+    @staticmethod
+    def _tuple_factory(cursor, row, /, *, metadata: Metadata):
+        columns = [x[0] for x in cursor.description]
+        keys_dict = {k: v for (k, v) in zip(columns, row) if k in metadata.key_columns}
+        values_dict = {
+            k: v for (k, v) in zip(columns, row) if k in metadata.value_columns
+        }
+        count_dict = {
+            "c": v for (k, v) in zip(columns, row) if k == metadata.count_column
+        }
+
+        rv = {
+            "k": None,
+            "v": None,
+            "c": None,
+        }
+        if keys_dict:
+            rv["k"] = metadata.key_tuple(**keys_dict)
+        if values_dict:
+            rv["v"] = metadata.value_tuple(**values_dict)
+        if count_dict:
+            rv["c"] = count_dict["c"]
+
+        return rv
+
     @classmethod
     def _open_connection(
         cls,
         **kwargs,
     ) -> sqlite3.Connection:
         conn = sqlite3.connect(**kwargs)
-        conn.row_factory = sqlite3.Row
         return conn
 
     @classmethod

@@ -26,28 +26,14 @@ class ActionType(enum.Enum):
 
 class Action(typing.NamedTuple):
     type: ActionType
-    result: typing.Optional[
-        typing.List[
-            typing.Tuple[
-                typing.Mapping[str, typing.Any],
-                typing.Mapping[str, typing.Any],
-            ]
-        ]
-    ]
-    key: typing.Optional[typing.Mapping[str, typing.Any]] = None
-    value: typing.Optional[typing.Mapping[str, typing.Any]] = None
+    result: typing.Optional[typing.Mapping[typing.Any, typing.Any]]
+    key: typing.Optional[typing.Any] = None
+    value: typing.Optional[typing.Any] = None
 
 
 class Extra(typing.NamedTuple):
     sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None
-    preexisting: typing.Optional[
-        typing.List[
-            typing.Tuple[
-                typing.Mapping[str, typing.Any],
-                typing.Mapping[str, typing.Any],
-            ]
-        ]
-    ] = None
+    preexisting: typing.Optional[typing.Mapping[typing.Any, typing.Any]] = None
     actions: typing.Optional[typing.Iterable[Action]] = None
 
 
@@ -55,6 +41,25 @@ class Def(typing.NamedTuple):
     name: str
     mapping: CacheDictMapping
     extra: Extra
+
+
+empty_aA__bB = CacheDictMapping(  # noqa: N816
+    table="empty",
+    keys={"a": "A"},
+    values={"b": "B"},
+)
+minimal_aA__bB = CacheDictMapping(  # noqa: N816
+    table="minimal",
+    keys={"a": "A"},
+    values={"b": "B"},
+)
+minimal_two_aA_bB__cC_dD = CacheDictMapping(  # noqa: N816
+    table="minimal_two",
+    keys={"a": "A", "b": "B"},
+    values={"c": "C", "d": "D"},
+)
+
+NOT_PRESENT = object()
 
 
 @test_level(TestLevel.PRE_COMMIT)
@@ -75,60 +80,36 @@ class TestCacheDictCreation(SqliteCachingTestBase):
     success_params = [
         Def(
             name="empty",
-            mapping=CacheDictMapping(
-                table="empty",
-                keys={"a": "A"},
-                values={"b": "B"},
-            ),
-            extra=Extra(preexisting=[], actions=[]),
+            mapping=empty_aA__bB,
+            extra=Extra(preexisting={}, actions=[]),
         ),
         Def(
             name="minimal",
-            mapping=CacheDictMapping(
-                table="minimal",
-                keys={"a": "A"},
-                values={"b": "B"},
-            ),
+            mapping=minimal_aA__bB,
             extra=Extra(
-                preexisting=[
-                    (
-                        {"a": "a"},
-                        {"b": "b"},
-                    ),
-                    (
-                        {"a": "b"},
-                        {"b": "a"},
-                    ),
-                    (
-                        {"a": "f"},
-                        {},
-                    ),
-                ],
+                preexisting={
+                    minimal_aA__bB.KeyTuple("a"): minimal_aA__bB.ValueTuple("b"),
+                    minimal_aA__bB.KeyTuple("b"): minimal_aA__bB.ValueTuple("a"),
+                    minimal_aA__bB.KeyTuple("f"): NOT_PRESENT,
+                },
                 actions=[],
             ),
         ),
         Def(
             name="minimal",
-            mapping=CacheDictMapping(
-                table="minimal_two",
-                keys={"a": "A", "b": "B"},
-                values={"c": "C", "d": "D"},
-            ),
+            mapping=minimal_two_aA_bB__cC_dD,
             extra=Extra(
-                preexisting=[
-                    (
-                        {"a": "a", "b": "b"},
-                        {"c": "c", "d": "d"},
-                    ),
-                    (
-                        {"a": "b", "b": "a"},
-                        {"c": "d", "d": "c"},
-                    ),
-                    (
-                        {"a": "a", "b": "a"},
-                        {},
-                    ),
-                ],
+                preexisting={
+                    minimal_two_aA_bB__cC_dD.KeyTuple(
+                        "a",
+                        "b",
+                    ): minimal_two_aA_bB__cC_dD.ValueTuple("c", "d"),
+                    minimal_two_aA_bB__cC_dD.KeyTuple(
+                        "b",
+                        "a",
+                    ): minimal_two_aA_bB__cC_dD.ValueTuple("d", "c"),
+                    minimal_two_aA_bB__cC_dD.KeyTuple("a", "a"): NOT_PRESENT,
+                },
                 actions=[],
             ),
         ),
@@ -166,16 +147,17 @@ class TestCacheDictCreation(SqliteCachingTestBase):
         if extra.preexisting:
             preexist = extra.preexisting
         else:
-            preexist = []
-        for (key, expected) in preexist:
-            if expected:
+            preexist = {}
+        for (key, expected) in preexist.items():
+            if expected is not NOT_PRESENT:
                 actual = c[key]
-                for (exp_key, exp_value) in expected.items():
-                    self.assertEqual(actual[exp_key], exp_value)
+                self.assertEqual(actual, expected)
             else:
                 with self.assertRaises(KeyError) as raised_context:
                     _ = c[key]
                 _ = raised_context.exception
+
+        _ = len(c)
 
         self.assertNotEqual(c, None)
 
@@ -191,12 +173,11 @@ class TestCacheDictCreation(SqliteCachingTestBase):
         if extra.preexisting:
             preexist = extra.preexisting
         else:
-            preexist = []
-        for (key, expected) in preexist:
-            if expected:
+            preexist = {}
+        for (key, expected) in preexist.items():
+            if expected is not NOT_PRESENT:
                 actual = c[key]
-                for (exp_key, exp_value) in expected.items():
-                    self.assertEqual(actual[exp_key], exp_value)
+                self.assertEqual(actual, expected)
             else:
                 with self.assertRaises(KeyError) as raised_context:
                     _ = c[key]
