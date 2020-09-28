@@ -123,9 +123,9 @@ class CacheDict(typing.Mapping[KT, VT]):
         self.conn = conn
         metadata = Metadata(
             mapping.KeyType,
-            mapping.key_idents,
+            frozenset(i.replace('"', "") for i in mapping.key_idents),
             mapping.ValueType,
-            mapping.value_idents,
+            frozenset(i.replace('"', "") for i in mapping.value_idents),
             "COUNT(*)",
         )
         self.conn.row_factory = functools.partial(
@@ -211,7 +211,7 @@ class CacheDict(typing.Mapping[KT, VT]):
             raise
         else:
             remove_stmt = self.mapping.remove_statement()
-            cursor = self.conn.execute(remove_stmt, key)
+            cursor = self.conn.execute(remove_stmt, dataclasses.astuple(key))
             cursor.fetchone()
 
     def __contains__(self, key, /) -> bool:
@@ -225,7 +225,7 @@ class CacheDict(typing.Mapping[KT, VT]):
                 },
             )
         select_stmt = self.mapping.select_statement()
-        cursor = self.conn.execute(select_stmt, key)
+        cursor = self.conn.execute(select_stmt, dataclasses.astuple(key))
         row = cursor.fetchone()["v"]
         if row:
             return True
@@ -243,7 +243,7 @@ class CacheDict(typing.Mapping[KT, VT]):
                 },
             )
         select_stmt = self.mapping.select_statement()
-        cursor = self.conn.execute(select_stmt, key)
+        cursor = self.conn.execute(select_stmt, dataclasses.astuple(key))
         row = cursor.fetchone()
         if not row:
             raise CacheDictNoSuchKeyException(
@@ -300,7 +300,10 @@ class CacheDict(typing.Mapping[KT, VT]):
                 )
                 raise
         upsert_stmt = self.mapping.upsert_statement()
-        cursor = self.conn.execute(upsert_stmt, (*key, *value))
+        cursor = self.conn.execute(
+            upsert_stmt,
+            dataclasses.astuple(key) + dataclasses.astuple(value),
+        )
         try:
             cursor.fetchone()
         except Exception:

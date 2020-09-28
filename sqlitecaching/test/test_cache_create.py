@@ -47,36 +47,49 @@ class Def(typing.NamedTuple):
     extra: Extra
 
 
-@dataclass
+@dataclass(frozen=True)
 class A:
-    a: int
+    a: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class B:
-    b: int
+    b: str
 
 
-# empty_aA__bB = CacheDictMapping[TplA, TplB](  # no qa: N816
+@dataclass(frozen=True)
+class AB:
+    a: str
+    b: str
+
+
+@dataclass(frozen=True)
+class CD:
+    c: str
+    d: str
+
+
 empty_aA__bB = CacheDictMapping(  # noqa: N816
     table="empty",
     key_type=A,
-    key_types=A("A"),  # type: ignore
+    key_types=A("A"),
     value_type=B,
-    value_types=B("B"),  # type: ignore
-    # keys={"a": "A"},
-    # values={"b": "B"},
+    value_types=B("B"),
 )
-# minimal_aA__bB = CacheDictMapping(  # noqa: N816
-#    table="minimal",
-#    keys={"a": "A"},
-#    values={"b": "B"},
-# )
-# minimal_two_aA_bB__cC_dD = CacheDictMapping(  # noqa: N816
-#    table="minimal_two",
-#    keys={"a": "A", "b": "B"},
-#    values={"c": "C", "d": "D"},
-# )
+minimal_aA__bB = CacheDictMapping(  # noqa: N816
+    table="minimal",
+    key_type=A,
+    key_types=A("A"),
+    value_type=B,
+    value_types=B("B"),
+)
+minimal_two_aA_bB__cC_dD = CacheDictMapping(  # noqa: N816
+    table="minimal_two",
+    key_type=AB,
+    key_types=AB("A", "B"),
+    value_type=CD,
+    value_types=CD("C", "D"),
+)
 
 NOT_PRESENT = object()
 
@@ -102,36 +115,30 @@ class TestCacheDictCreation(SqliteCachingTestBase):
             mapping=empty_aA__bB,
             extra=Extra(preexisting={}, actions=[]),
         ),
-        # Def(
-        #    name="minimal",
-        #    mapping=minimal_aA__bB,
-        #    extra=Extra(
-        #        preexisting={
-        #            minimal_aA__bB.KeyTuple("a"): minimal_aA__bB.ValueTuple("b"),
-        #            minimal_aA__bB.KeyTuple("b"): minimal_aA__bB.ValueTuple("a"),
-        #            minimal_aA__bB.KeyTuple("f"): NOT_PRESENT,
-        #        },
-        #        actions=[],
-        #    ),
-        # ),
-        # Def(
-        #    name="minimal",
-        #    mapping=minimal_two_aA_bB__cC_dD,
-        #    extra=Extra(
-        #        preexisting={
-        #            minimal_two_aA_bB__cC_dD.KeyTuple(
-        #                "a",
-        #                "b",
-        #            ): minimal_two_aA_bB__cC_dD.ValueTuple("c", "d"),
-        #            minimal_two_aA_bB__cC_dD.KeyTuple(
-        #                "b",
-        #                "a",
-        #            ): minimal_two_aA_bB__cC_dD.ValueTuple("d", "c"),
-        #            minimal_two_aA_bB__cC_dD.KeyTuple("a", "a"): NOT_PRESENT,
-        #        },
-        #        actions=[],
-        #    ),
-        # ),
+        Def(
+            name="minimal",
+            mapping=minimal_aA__bB,
+            extra=Extra(
+                preexisting={
+                    A("a"): B("b"),
+                    A("b"): B("a"),
+                    A("f"): NOT_PRESENT,
+                },
+                actions=[],
+            ),
+        ),
+        Def(
+            name="minimal",
+            mapping=minimal_two_aA_bB__cC_dD,
+            extra=Extra(
+                preexisting={
+                    AB("a", "b"): CD("c", "d"),
+                    AB("b", "a"): CD("d", "c"),
+                    AB("a", "a"): NOT_PRESENT,
+                },
+                actions=[],
+            ),
+        ),
     ]
 
     @parameterized.parameterized.expand(success_params)
