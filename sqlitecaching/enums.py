@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 
 try:
     _ = EnumCategory  # type: ignore
-    log.info("Not redefining exceptions")
+    log.info("Not redefining exceptions")  # pragma: no cover
 except NameError:
     EnumCategory = SqliteCachingException.register_category(
         category_name=f"{__name__}.EnumCategory",

@@ -310,7 +310,7 @@ class SqliteCachingException(Exception):
 
 try:
     _ = SqliteCachineMetaCategory  # type: ignore
-    log.info("Not redefining exceptions")
+    log.info("Not redefining exceptions")  # pragma: no cover
 except NameError:
     SqliteCachingMetaCategory = SqliteCachingException.register_category(
         category_name=f"{__name__}.SqliteCachingMetaCategory",

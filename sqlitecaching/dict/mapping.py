@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 
 try:
     _ = CacheDictMappingCategory  # type: ignore
-    log.info("Not redefining exceptions")
+    log.info("Not redefining exceptions")  # pragma: no cover
 except NameError:
     CacheDictMappingCategory = SqliteCachingException.register_category(
         category_name=f"{__name__}.CacheDictMappingCategory",

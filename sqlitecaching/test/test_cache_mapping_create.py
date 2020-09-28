@@ -10,11 +10,14 @@ from sqlitecaching.dict.mapping import (
     CacheDictMappingIncorrectKeyTypesTypeException,
     CacheDictMappingIncorrectValueTypesTypeException,
     CacheDictMappingInvalidIdentifierException,
+    CacheDictMappingInvalidSQLParamTypeException,
     CacheDictMappingInvalidSQLTypeException,
+    CacheDictMappingKeyTypeNotDataclassException,
     CacheDictMappingKeyValOverlapException,
     CacheDictMappingMissingKeysException,
     CacheDictMappingNoIdentifierProvidedException,
     CacheDictMappingReservedTableException,
+    CacheDictMappingValueTypeNotDataclassException,
 )
 from sqlitecaching.exceptions import ExceptProvider, SqliteCachingException
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
@@ -76,6 +79,10 @@ class BB:
 class CD:
     c: str
     d: str
+
+
+class NonDataclass:
+    a: str
 
 
 @dataclass
@@ -366,7 +373,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 exception=CacheDictMappingIncorrectKeyTypesTypeException,
             ),
             mapping=InvIn(
-                table="aa__bb_a",
+                table="aa__bb",
                 key_type=A,
                 key_types=B("B"),
                 value_type=B,
@@ -378,10 +385,44 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 exception=CacheDictMappingIncorrectValueTypesTypeException,
             ),
             mapping=InvIn(
-                table="aa__bb_a",
+                table="aa__bb",
                 key_type=A,
                 value_type=B,
                 value_types=A("A"),
+            ),
+        ),
+        FailInputDef(
+            result=FailRes(
+                name="nondataclass_key_type",
+                exception=CacheDictMappingKeyTypeNotDataclassException,
+            ),
+            mapping=InvIn(
+                table="nondataclass__bb",
+                key_type=NonDataclass,
+                value_type=B,
+            ),
+        ),
+        FailInputDef(
+            result=FailRes(
+                name="nondataclass_value_type",
+                exception=CacheDictMappingValueTypeNotDataclassException,
+            ),
+            mapping=InvIn(
+                table="aa__nondataclass",
+                key_type=A,
+                value_type=NonDataclass,
+            ),
+        ),
+        FailInputDef(
+            result=FailRes(
+                name="invalid_sqltype",
+                exception=CacheDictMappingInvalidSQLParamTypeException,
+            ),
+            mapping=InvIn(
+                table="a___b1",
+                key_type=A,
+                value_type=B,
+                value_types=B(1),  # type: ignore
             ),
         ),
     ]
