@@ -1,13 +1,14 @@
 import itertools
 import logging
 import typing
+from dataclasses import dataclass
 
 import parameterized
 
 from sqlitecaching.dict.mapping import (
     CacheDictMapping,
-    CacheDictMappingDuplicateKeysException,
-    CacheDictMappingDuplicateValuesException,
+    CacheDictMappingIncorrectKeyTypesTypeException,
+    CacheDictMappingIncorrectValueTypesTypeException,
     CacheDictMappingInvalidIdentifierException,
     CacheDictMappingInvalidSQLTypeException,
     CacheDictMappingKeyValOverlapException,
@@ -15,27 +16,80 @@ from sqlitecaching.dict.mapping import (
     CacheDictMappingNoIdentifierProvidedException,
     CacheDictMappingReservedTableException,
 )
-from sqlitecaching.exceptions import ExceptProvider, ParamMap, SqliteCachingException
+from sqlitecaching.exceptions import ExceptProvider, SqliteCachingException
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
 
+KT = typing.TypeVar("KT")
+VT = typing.TypeVar("VT")
 
-class In(typing.NamedTuple):
+
+@dataclass
+class In(typing.Generic[KT, VT]):
     table: str
-    keys: ParamMap
-    values: typing.Optional[ParamMap]
+    key_type: typing.Type[KT]
+    value_type: typing.Type[VT]
+    key_types: typing.Optional[KT] = None
+    value_types: typing.Optional[VT] = None
 
 
-class InvIn(typing.NamedTuple):
+@dataclass
+class Empty:
+    pass
+
+
+@dataclass
+class A:
+    a: str
+
+
+@dataclass
+class B:
+    b: str
+
+
+@dataclass
+class C:
+    c: str
+
+
+@dataclass
+class AA:
+    a: str
+    A: str
+
+
+@dataclass
+class AB:
+    a: str
+    b: str
+
+
+@dataclass
+class BB:
+    b: str
+    B: str
+
+
+@dataclass
+class CD:
+    c: str
+    d: str
+
+
+@dataclass
+class InvIn(typing.Generic[KT, VT]):
     table: typing.Optional[str]
-    keys: typing.Mapping[typing.Optional[str], typing.Optional[str]]
-    values: typing.Optional[typing.Mapping[typing.Optional[str], typing.Optional[str]]]
+    key_type: typing.Optional[typing.Type[KT]]
+    value_type: typing.Optional[typing.Type[VT]]
+    key_types: typing.Optional[KT] = None
+    value_types: typing.Optional[VT] = None
 
 
-class Def(typing.NamedTuple):
+class Def(typing.NamedTuple, typing.Generic[KT, VT]):
     name: str
-    mapping: typing.Union[In, InvIn]
+    mapping: typing.Union[In[KT, VT], InvIn[KT, VT]]
     expected: typing.Any
     meta: typing.Optional[typing.Any] = None
 
@@ -45,14 +99,16 @@ class FailRes(typing.NamedTuple):
     exception: ExceptProvider[SqliteCachingException]
 
 
-class InputDef(typing.NamedTuple):
+@dataclass
+class InputDef(typing.Generic[KT, VT]):
     result: str
-    mapping: In
+    mapping: In[KT, VT]
 
 
-class FailInputDef(typing.NamedTuple):
+@dataclass
+class FailInputDef(typing.Generic[KT, VT]):
     result: FailRes
-    mapping: InvIn
+    mapping: InvIn[KT, VT]
 
 
 @test_level(TestLevel.PRE_COMMIT)
@@ -74,114 +130,135 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         "values_statement",
     ]
 
-    success_mapping_definitions = [
+    success_mapping_definitions: typing.Iterable[InputDef] = [
         InputDef(
             result="aA__to__",
             mapping=In(
                 table="aa",
-                keys={"a": "A"},
-                values={},
+                key_type=A,
+                key_types=A("A"),
+                value_type=Empty,
             ),
         ),
         InputDef(
             result="aA__to__bB",
             mapping=In(
                 table="aa__bb",
-                keys={"a": "A"},
-                values={"b": "B"},
+                key_type=A,
+                key_types=A("A"),
+                value_type=B,
+                value_types=B("B"),
             ),
         ),
         InputDef(
             result="aA_bB__to__",
             mapping=In(
                 table="aa_bb",
-                keys={"a": "A", "b": "B"},
-                values={},
+                key_type=AB,
+                key_types=AB("A", "B"),
+                value_type=Empty,
             ),
         ),
         InputDef(
             result="aA_bB__to__",
             mapping=In(
-                table="aA_bB",
-                keys={"a": "a", "b": "b"},
-                values={},
+                table="aa_bb",
+                key_type=AB,
+                key_types=AB("A", "B"),
+                value_type=Empty,
             ),
         ),
         InputDef(
             result="aA_bB__to__cC",
             mapping=In(
                 table="aa_bb__cc",
-                keys={"a": "a", "b": "b"},
-                values={"c": "C"},
+                key_type=AB,
+                key_types=AB("A", "B"),
+                value_type=C,
+                value_types=C("C"),
             ),
         ),
         InputDef(
             result="aA_bB__to__cC_dD",
             mapping=In(
                 table="aa_bb__cc_dd",
-                keys={"a": "a", "b": "b"},
-                values={"c": "C", "d": "D"},
+                key_type=AB,
+                key_types=AB("A", "B"),
+                value_type=CD,
+                value_types=CD("C", "D"),
             ),
         ),
         InputDef(
             result="aA_bB__to__cC_dD",
             mapping=In(
                 table="aa_bb__cc_dd",
-                keys={"b": "B", "a": "A"},
-                values={"d": "D", "c": "C"},
+                key_type=AB,
+                key_types=AB("A", "B"),
+                value_type=CD,
+                value_types=CD("C", "D"),
             ),
         ),
         InputDef(
             result="a___to__cC",
             mapping=In(
                 table="a___cc",
-                keys={"a": ""},
-                values={"c": "C"},
+                key_type=A,
+                value_type=C,
+                value_types=C("C"),
             ),
         ),
         InputDef(
             result="a___to__cC",
             mapping=In(
                 table="a___cc",
-                keys={"a": " "},
-                values={"c": "C"},
+                key_type=A,
+                value_type=C,
+                value_types=C("C"),
             ),
         ),
         InputDef(
             result="a___to__cC",
             mapping=In(
                 table="a___cc",
-                keys={"a": None},
-                values={"c": "C"},
+                key_type=A,
+                key_types=A(None),  # type: ignore
+                value_type=C,
+                value_types=C("C"),
             ),
         ),
         InputDef(
             result="aA__to__c_",
             mapping=In(
                 table="aa__c_",
-                keys={"a": "A"},
-                values={"c": ""},
+                key_type=A,
+                key_types=A("A"),
+                value_type=C,
+                value_types=C(""),
             ),
         ),
         InputDef(
             result="aA__to__c_",
             mapping=In(
                 table="aa__c_",
-                keys={"a": "A"},
-                values={"c": " "},
+                key_type=A,
+                key_types=A("A"),
+                value_type=C,
+                value_types=C(None),  # type: ignore
             ),
         ),
         InputDef(
             result="aA__to__c_",
             mapping=In(
                 table="aa__c_",
-                keys={"a": "A"},
-                values={"c": None},
+                key_type=A,
+                key_types=A("A"),
+                value_type=C,
+                value_types=C(0),  # type: ignore
             ),
         ),
     ]
 
-    fail_mapping_definitions = [
+    fail_mapping_definitions: typing.Iterable[FailInputDef] = [
         FailInputDef(
             result=FailRes(
                 name="blank_table_name",
@@ -189,8 +266,8 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             ),
             mapping=InvIn(
                 table="",
-                keys={"a": "A"},
-                values={"b": "B"},
+                key_type=A,
+                value_type=B,
             ),
         ),
         FailInputDef(
@@ -200,8 +277,8 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             ),
             mapping=InvIn(
                 table=None,
-                keys={"a": "A"},
-                values={"b": "B"},
+                key_type=A,
+                value_type=B,
             ),
         ),
         FailInputDef(
@@ -211,8 +288,8 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             ),
             mapping=InvIn(
                 table=" ",
-                keys={"a": "A"},
-                values={"b": "B"},
+                key_type=A,
+                value_type=B,
             ),
         ),
         FailInputDef(
@@ -222,8 +299,8 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             ),
             mapping=InvIn(
                 table="x.y",
-                keys={"a": "A"},
-                values={"b": "B"},
+                key_type=A,
+                value_type=A,
             ),
         ),
         FailInputDef(
@@ -233,8 +310,8 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             ),
             mapping=InvIn(
                 table="sqlite_a",
-                keys={"a": "A"},
-                values={"b": "B"},
+                key_type=A,
+                value_type=B,
             ),
         ),
         FailInputDef(
@@ -243,9 +320,9 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 exception=CacheDictMappingMissingKeysException,
             ),
             mapping=InvIn(
-                table="__bB",
-                keys={},
-                values={"b": "B"},
+                table="x__bb",
+                key_type=Empty,
+                value_type=B,
             ),
         ),
         FailInputDef(
@@ -254,108 +331,119 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 exception=CacheDictMappingKeyValOverlapException,
             ),
             mapping=InvIn(
-                table="aA__aA_bB",
-                keys={"a": "A"},
-                values={"a": "A", "b": "B"},
+                table="aa__aa_bb",
+                key_type=A,
+                value_type=AB,
             ),
         ),
-        FailInputDef(
-            result=FailRes(
-                name="blank_key_name",
-                exception=CacheDictMappingNoIdentifierProvidedException,
-            ),
-            mapping=InvIn(
-                table="A_bB",
-                keys={"": "A"},
-                values={"b": "B"},
-            ),
-        ),
-        FailInputDef(
-            result=FailRes(
-                name="none_key_name",
-                exception=CacheDictMappingNoIdentifierProvidedException,
-            ),
-            mapping=InvIn(
-                table="A_bB",
-                keys={None: "A"},
-                values={"b": "B"},
-            ),
-        ),
-        FailInputDef(
-            result=FailRes(
-                name="space_key_name",
-                exception=CacheDictMappingInvalidIdentifierException,
-            ),
-            mapping=InvIn(
-                table="A_bB",
-                keys={" ": "A"},
-                values={"b": "B"},
-            ),
-        ),
-        FailInputDef(
-            result=FailRes(
-                name="invalid_key_name",
-                exception=CacheDictMappingInvalidIdentifierException,
-            ),
-            mapping=InvIn(
-                table="A_bB",
-                keys={"x.y": "A"},
-                values={"b": "B"},
-            ),
-        ),
-        FailInputDef(
-            result=FailRes(
-                name="duplicated_key_name",
-                exception=CacheDictMappingDuplicateKeysException,
-            ),
-            mapping=InvIn(
-                table="aA_AA__bB",
-                keys={"a": "A", "A": "A"},
-                values={"b": "B"},
-            ),
-        ),
-        FailInputDef(
-            result=FailRes(
-                name="duplicated_key_name2",
-                exception=CacheDictMappingDuplicateKeysException,
-            ),
-            mapping=InvIn(
-                table="aA_a_A__bB",
-                keys={"a": "A", "a ": "A"},
-                values={"b": "B"},
-            ),
-        ),
-        FailInputDef(
-            result=FailRes(
-                name="duplicated_value_name",
-                exception=CacheDictMappingDuplicateValuesException,
-            ),
-            mapping=InvIn(
-                table="aA_AA__bB_BB",
-                keys={"a": "A"},
-                values={"b": "B", "B": "B"},
-            ),
-        ),
-        FailInputDef(
-            result=FailRes(
-                name="duplicated_value_name2",
-                exception=CacheDictMappingDuplicateValuesException,
-            ),
-            mapping=InvIn(
-                table="aA_AA__bB_b_B",
-                keys={"a": "A"},
-                values={"b": "B", "b ": "B"},
-            ),
-        ),
+        # Not sure these can be done with dataclasses?
+        # No way to have a blank identifier in a class as in a dict(?)
+        # FailInputDef(
+        #    result=FailRes(
+        #        name="blank_key_name",
+        #        exception=CacheDictMappingNoIdentifierProvidedException,
+        #    ),
+        #    mapping=InvIn(
+        #        table="A_bB",
+        #        key_type={"": "A"},
+        #        value_type=B,
+        #    ),
+        # ),
+        # No way to have an identifier with name == None (the Nonetype value)
+        # FailInputDef(
+        #    result=FailRes(
+        #        name="none_key_name",
+        #        exception=CacheDictMappingNoIdentifierProvidedException,
+        #    ),
+        #    mapping=InvIn(
+        #        table="A_bB",
+        #        key_type={None: "A"},
+        #        value_type={"b": "B"},
+        #    ),
+        # ),
+        # No way to have an identifier named with U+0020 (' ' / space)
+        # FailInputDef(
+        #    result=FailRes(
+        #        name="space_key_name",
+        #        exception=CacheDictMappingInvalidIdentifierException,
+        #    ),
+        #    mapping=InvIn(
+        #        table="A_bB",
+        #        key_type={" ": "A"},
+        #        value_type={"b": "B"},
+        #    ),
+        # ),
+        # this would be the y attribute of x
+        # FailInputDef(
+        #    result=FailRes(
+        #        name="invalid_key_name",
+        #        exception=CacheDictMappingInvalidIdentifierException,
+        #    ),
+        #    mapping=InvIn(
+        #        table="A_bB",
+        #        key_type={"x.y": "A"},
+        #        value_type={"b": "B"},
+        #    ),
+        # ),
+        # This doesn't work because A doesn't meet the validity for identifiers
+        # we have defined (so we (correctly) get a InvIdent instead of DupKey)
+        # FailInputDef(
+        #    result=FailRes(
+        #        name="duplicated_key_name",
+        #        exception=CacheDictMappingDuplicateKeysException,
+        #    ),
+        #    mapping=InvIn(
+        #        table="aa_aa__bb",
+        #        key_type=AA,
+        #        value_type=B,
+        #    ),
+        # ),
+        # As above, cannot have a space in an identifier
+        # FailInputDef(
+        #    result=FailRes(
+        #        name="duplicated_key_name2",
+        #        exception=CacheDictMappingDuplicateKeysException,
+        #    ),
+        #    mapping=InvIn(
+        #        table="aA_a_A__bB",
+        #        key_type={"a": "A", "a ": "A"},
+        #        value_type={"b": "B"},
+        #    ),
+        # ),
+        # As above, B is not considered a valid identifier
+        # FailInputDef(
+        #    result=FailRes(
+        #        name="duplicated_value_name",
+        #        exception=CacheDictMappingDuplicateValuesException,
+        #    ),
+        #    mapping=InvIn(
+        #        table="aa_aa__bb_bb",
+        #        key_type=A,
+        #        value_type=BB,
+        #    ),
+        # ),
+        # As above, cannot have a space in an identifier
+        # FailInputDef(
+        #    result=FailRes(
+        #        name="duplicated_value_name2",
+        #        exception=CacheDictMappingDuplicateValuesException,
+        #    ),
+        #    mapping=InvIn(
+        #        table="aA_AA__bB_b_B",
+        #        key_type={"a": "A"},
+        #        value_type={"b": "B", "b ": "B"},
+        #    ),
+        # ),
         FailInputDef(
             result=FailRes(
                 name="invalid_key_sqltype",
                 exception=CacheDictMappingInvalidSQLTypeException,
             ),
             mapping=InvIn(
-                table="aA_B__bB",
-                keys={"a": "A.B"},
-                values={"b": "B"},
+                table="aa_b__bb",
+                key_type=A,
+                key_types=A("A.B"),
+                value_type=B,
             ),
         ),
         FailInputDef(
@@ -364,9 +452,34 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 exception=CacheDictMappingInvalidSQLTypeException,
             ),
             mapping=InvIn(
-                table="aA__bB_A",
-                keys={"a": "A"},
-                values={"b": "B.A"},
+                table="aa__bb_a",
+                key_type=A,
+                value_type=B,
+                value_types=B("B.A"),
+            ),
+        ),
+        FailInputDef(
+            result=FailRes(
+                name="invalid_key_types_type",
+                exception=CacheDictMappingIncorrectKeyTypesTypeException,
+            ),
+            mapping=InvIn(
+                table="aa__bb_a",
+                key_type=A,
+                key_types=B("B"),
+                value_type=B,
+            ),
+        ),
+        FailInputDef(
+            result=FailRes(
+                name="invalid_value_types_type",
+                exception=CacheDictMappingIncorrectValueTypesTypeException,
+            ),
+            mapping=InvIn(
+                table="aa__bb_a",
+                key_type=A,
+                value_type=B,
+                value_types=A("A"),
             ),
         ),
     ]
@@ -410,8 +523,10 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         log.debug("create CacheDictMapping")
         actual = CacheDictMapping(  # typing: ignore
             table=mapping.table,
-            keys=mapping.keys,
-            values=mapping.values,
+            key_type=mapping.key_type,
+            key_types=mapping.key_types,
+            value_type=mapping.value_type,
+            value_types=mapping.value_types,
         )
         log.debug("created CacheDictMapping: %s", actual)
 
@@ -447,8 +562,10 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             # specified by the __init__ method, so have to ignore types here
             CacheDictMapping(
                 table=mapping.table,  # type: ignore
-                keys=mapping.keys,  # type: ignore
-                values=mapping.values,  # type: ignore
+                key_type=mapping.key_type,  # type: ignore
+                key_types=mapping.key_types,  # type: ignore
+                value_type=mapping.value_type,  # type: ignore
+                value_types=mapping.value_types,  # type: ignore
             )
         actual = raised_context.exception
         self.assertEqual(actual.category.id, expected.category_id, actual.msg)

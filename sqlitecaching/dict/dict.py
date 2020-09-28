@@ -1,3 +1,4 @@
+import dataclasses
 import enum
 import functools
 import logging
@@ -101,7 +102,7 @@ class CacheDict(typing.Mapping[KT, VT]):
         self,
         *,
         conn: sqlite3.Connection,
-        mapping: CacheDictMapping,
+        mapping: CacheDictMapping[KT, VT],
         read_only: bool = False,
         **kwargs,
     ):
@@ -121,10 +122,10 @@ class CacheDict(typing.Mapping[KT, VT]):
 
         self.conn = conn
         metadata = Metadata(
-            mapping.KeyTuple,
-            frozenset(mapping.KeyTuple._fields),
-            mapping.ValueTuple,
-            frozenset(mapping.ValueTuple._fields),
+            mapping.KeyType,
+            mapping.key_idents,
+            mapping.ValueType,
+            mapping.value_idents,
             "COUNT(*)",
         )
         self.conn.row_factory = functools.partial(
@@ -190,12 +191,12 @@ class CacheDict(typing.Mapping[KT, VT]):
 
     def __delitem__(self, key: KT, /) -> None:
         log.debug("delete [%#0x] key: [%s]", id(self), key)
-        if not isinstance(key, self.mapping.KeyTuple):
+        if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
                 {
                     "key": key,
                     "key_type": type(key),
-                    "KT": self.mapping.KeyTuple._field_types,
+                    "KT": self._get_key_type_mapping(),
                 },
             )
         try:
@@ -215,12 +216,12 @@ class CacheDict(typing.Mapping[KT, VT]):
 
     def __contains__(self, key, /) -> bool:
         log.debug("get [%#0x] key: [%s]", id(self), key)
-        if not isinstance(key, self.mapping.KeyTuple):
+        if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
                 {
                     "key": key,
                     "key_type": type(key),
-                    "KT": self.mapping.KeyTuple._field_types,
+                    "KT": self._get_key_type_mapping(),
                 },
             )
         select_stmt = self.mapping.select_statement()
@@ -233,12 +234,12 @@ class CacheDict(typing.Mapping[KT, VT]):
 
     def __getitem__(self, key: KT, /) -> VT:
         log.debug("get [%#0x] key: [%s]", id(self), key)
-        if not isinstance(key, self.mapping.KeyTuple):
+        if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
                 {
                     "key": key,
                     "key_type": type(key),
-                    "KT": self.mapping.KeyTuple._field_types,
+                    "KT": self._get_key_type_mapping(),
                 },
             )
         select_stmt = self.mapping.select_statement()
@@ -271,25 +272,33 @@ class CacheDict(typing.Mapping[KT, VT]):
         /,
     ) -> None:
         log.debug("set [%#0x] key: [%s] value: [%s]", id(self), key, value)
-        if not isinstance(key, self.mapping.KeyTuple):
+        if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
                 {
                     "key": key,
                     "key_type": type(key),
-                    "KT": self.mapping.KeyTuple._field_types,
+                    "KT": self._get_key_type_mapping(),
                 },
             )
         if value:
-            if not isinstance(value, self.mapping.ValueTuple):
+            if not isinstance(value, self.mapping.ValueType):
                 raise CacheDictValueTypeException(
                     {
                         "value": value,
                         "value_type": type(value),
-                        "VT": self.mapping.ValueTuple._field_types,
+                        "VT": self._get_value_type_mapping(),
                     },
                 )
         else:
-            value = self.mapping.ValueTuple()
+            try:
+                value = self.mapping.ValueType()
+            except Exception:
+                log.warn(
+                    "Exception from default constr. ValueType [%s]",
+                    self._get_value_type_mapping(),
+                    exc_info=True,
+                )
+                raise
         upsert_stmt = self.mapping.upsert_statement()
         cursor = self.conn.execute(upsert_stmt, (*key, *value))
         try:
@@ -310,6 +319,12 @@ class CacheDict(typing.Mapping[KT, VT]):
             # anything about it. If it's rethrown it will just be output
             # to stderr
             log.error("exception when closing conn: [%s]", conn, exc_info=True)
+
+    def _get_key_type_mapping(self):
+        return {f.name: f.type for f in dataclasses.fields(self.mapping.KeyType)}
+
+    def _get_value_type_mapping(self):
+        return {f.name: f.type for f in dataclasses.fields(self.mapping.ValueType)}
 
     @classmethod
     def _is_internally_constructed(
@@ -407,11 +422,9 @@ class CacheDict(typing.Mapping[KT, VT]):
 
     @classmethod
     def open_anon_memory(
-        cls,
+        cls: typing.Type["CacheDict[KT, VT]"],
         *,
-        mapping: CacheDictMapping,
-        key_tuple: typing.Type[KT],
-        value_tuple: typing.Type[VT],
+        mapping: CacheDictMapping[KT, VT],
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
     ) -> "CacheDict[KT, VT]":
         log.info("open anon memory")
@@ -430,11 +443,9 @@ class CacheDict(typing.Mapping[KT, VT]):
 
     @classmethod
     def open_anon_disk(
-        cls,
+        cls: typing.Type["CacheDict[KT, VT]"],
         *,
-        mapping: CacheDictMapping,
-        key_tuple: typing.Type[KT],
-        value_tuple: typing.Type[VT],
+        mapping: CacheDictMapping[KT, VT],
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
     ) -> "CacheDict[KT, VT]":
         log.info("open anon disk")
@@ -451,17 +462,14 @@ class CacheDict(typing.Mapping[KT, VT]):
             _cd_internal_flag=cls._internally_constructed,
         )
 
-        # TODO create table
         return cache_dict
 
     @classmethod
     def open_readonly(
-        cls,
+        cls: typing.Type["CacheDict[KT, VT]"],
         *,
         path: str,
-        mapping: CacheDictMapping,
-        key_tuple: typing.Type[KT],
-        value_tuple: typing.Type[VT],
+        mapping: CacheDictMapping[KT, VT],
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
     ) -> "CacheDict[KT, VT]":
         log.info("open readonly")
@@ -485,12 +493,10 @@ class CacheDict(typing.Mapping[KT, VT]):
 
     @classmethod
     def open_readwrite(
-        cls,
+        cls: typing.Type["CacheDict[KT, VT]"],
         *,
         path: str,
-        mapping: CacheDictMapping,
-        key_tuple: typing.Type[KT],
-        value_tuple: typing.Type[VT],
+        mapping: CacheDictMapping[KT, VT],
         create: typing.Optional[ToCreate] = ToCreate.NONE,
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
     ) -> "CacheDict[KT, VT]":
@@ -517,12 +523,10 @@ class CacheDict(typing.Mapping[KT, VT]):
 
     @classmethod
     def _create_from_conn(
-        cls,
+        cls: typing.Type["CacheDict[KT, VT]"],
         *,
         conn: sqlite3.Connection,
-        mapping: CacheDictMapping,
-        key_tuple: typing.Type[KT],
-        value_tuple: typing.Type[VT],
+        mapping: CacheDictMapping[KT, VT],
     ) -> "CacheDict[KT, VT]":
         log.warning(
             "creating CacheDict from existing connection may lead to "

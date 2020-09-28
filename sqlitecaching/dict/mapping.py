@@ -1,4 +1,4 @@
-import collections
+import dataclasses
 import logging
 import re
 import sqlite3
@@ -52,11 +52,14 @@ except NameError:
         fmt="The identifier provided: [{identifier}] does not have a value.",
         params=frozenset(["identifier"]),
     )
-    CacheDictMappingDuplicateKeysException = __CDMC.register_cause(
-        cause_name=f"{__name__}.DuplicateKeysException",
+    CacheDictMappingInvalidSQLParamTypeException = __CDMC.register_cause(
+        cause_name=f"{__name__}.InvalidSQLParamTypeException",
         cause_id=5,
-        fmt="Duplicate key column identifiers provided: [{dups}]",
-        params=frozenset(["dups"]),
+        fmt=(
+            "SQL parameter type value was provided as a truthy value of type "
+            "[{type}]. Parameter types must be strings."
+        ),
+        params=frozenset(["type"]),
     )
     CacheDictMappingInvalidSQLTypeException = __CDMC.register_cause(
         cause_name=f"{__name__}.InvalidSQLTypeException",
@@ -64,11 +67,35 @@ except NameError:
         fmt="sqltype provided: [{sqltype}] does not match requirements [{re}]",
         params=frozenset(["sqltype", "re"]),
     )
-    CacheDictMappingDuplicateValuesException = __CDMC.register_cause(
-        cause_name=f"{__name__}.DuplicateValuesException",
+    CacheDictMappingKeyTypeNotDataclassException = __CDMC.register_cause(
+        cause_name=f"{__name__}.KeyTypeNotDataclassException",
         cause_id=7,
-        fmt="Duplicate value column identifiers provided: [{dups}]",
-        params=frozenset(["dups"]),
+        fmt="Key type provided [{type}] is not a dataclass",
+        params=frozenset(["type"]),
+    )
+    CacheDictMappingValueTypeNotDataclassException = __CDMC.register_cause(
+        cause_name=f"{__name__}.ValueTypeNotDataclassException",
+        cause_id=8,
+        fmt="Value type provided [{type}] is not a dataclass",
+        params=frozenset(["type"]),
+    )
+    CacheDictMappingIncorrectKeyTypesTypeException = __CDMC.register_cause(
+        cause_name=f"{__name__}.IncorrectKeyTypesTypeException",
+        cause_id=9,
+        fmt=(
+            "The type of the key_types parameter provided: [{key_types}] is not "
+            "an instance of the key_type parameter [{key_type}]"
+        ),
+        params=frozenset(["key_types", "key_type"]),
+    )
+    CacheDictMappingIncorrectValueTypesTypeException = __CDMC.register_cause(
+        cause_name=f"{__name__}.IncorrectValueTypesTypeException",
+        cause_id=10,
+        fmt=(
+            "The type of the value_types parameter provided: [{value_types}] is "
+            "not an instance of the value_type parameter [{value_type}]"
+        ),
+        params=frozenset(["value_types", "value_type"]),
     )
 
 Ident = typing.NewType("Ident", str)
@@ -94,14 +121,19 @@ class ColInfo(typing.NamedTuple):
     sqltype: ValidSqlType
 
 
-class CacheDictMapping:
-    table_ident: ValidIdent
-    keys: ColMapping
-    values: ColMapping
+KT = typing.TypeVar("KT")
+VT = typing.TypeVar("VT")
 
-    KeyTuple: typing.Type
-    ValueTuple: typing.Type
-    ItemsTuple: typing.Type
+
+class CacheDictMapping(typing.Generic[KT, VT]):
+    table_ident: ValidIdent
+    key_idents: typing.FrozenSet[ValidIdent]
+    value_idents: typing.FrozenSet[ValidIdent]
+    key_columns: ColMapping
+    value_columns: ColMapping
+
+    KeyType: typing.Type[KT]
+    ValueType: typing.Type[VT]
 
     _create_statement: typing.Optional[SqlStatement] = None
     _clear_statement: typing.Optional[SqlStatement] = None
@@ -118,175 +150,140 @@ class CacheDictMapping:
         self,
         *,
         table: IdentIn,
-        keys: typing.Mapping[IdentIn, typing.Optional[SqlTypeIn]],
-        values: typing.Optional[typing.Mapping[IdentIn, typing.Optional[SqlTypeIn]]],
+        key_type: typing.Type[KT],
+        value_type: typing.Type[VT],
+        key_types: typing.Optional[KT] = None,
+        value_types: typing.Optional[VT] = None,
     ):
-        _table = Ident(table)
-        if not keys:
-            raise CacheDictMappingMissingKeysException({"no_keys": keys})
+        self.table_ident = self._validate_ident(Ident(table))
+        if self.table_ident.startswith('"sqlite_'):
+            raise CacheDictMappingReservedTableException({"table_name": table})
 
-        _keys = {
-            Ident(column): (SqlType(sqltype) if sqltype else None)
-            for (column, sqltype) in keys.items()
-        }
+        if not dataclasses.is_dataclass(key_type):
+            raise CacheDictMappingKeyTypeNotDataclassException({"type": key_type})
+        if not dataclasses.is_dataclass(value_type):
+            raise CacheDictMappingValueTypeNotDataclassException({"type": value_type})
 
-        if not values:
-            log.info("providing empty dict for values")
-            _values = {}
+        self.key_idents = self._validate_idents(dataclasses.fields(key_type))
+        self.value_idents = self._validate_idents(dataclasses.fields(value_type))
+
+        if not self.key_idents:
+            raise CacheDictMappingMissingKeysException({"no_keys": self.key_idents})
+
+        overlap_idents = self.key_idents & self.value_idents
+        if overlap_idents:
+            raise CacheDictMappingKeyValOverlapException({"columns": overlap_idents})
+
+        self.KeyType = key_type
+        self.ValueType = value_type
+
+        if key_types:
+            if not isinstance(key_types, key_type):
+                raise CacheDictMappingIncorrectKeyTypesTypeException(
+                    {"key_types": type(key_types), "key_type": key_type},
+                )
+            self.key_columns = self._column_info(dataclasses.asdict(key_types))
         else:
-            _values = {
-                Ident(column): (SqlType(sqltype) if sqltype else None)
-                for (column, sqltype) in values.items()
-            }
-
-        validated_table = self._validate_identifier(identifier=_table)
-        if validated_table.startswith('"sqlite_'):
-            raise CacheDictMappingReservedTableException(
-                {"table_name": validated_table},
-            )
-
-        key_columns: typing.Dict[ValidIdent, ColInfo] = collections.OrderedDict()
-        value_columns: typing.Dict[ValidIdent, ColInfo] = collections.OrderedDict()
-
-        dup_key_columns: typing.Dict[ValidIdent, IdentClash] = {}
-        keyval_columns: typing.Dict[ValidIdent, IdentClash] = {}
-        dup_value_columns: typing.Dict[ValidIdent, IdentClash] = {}
-
-        unset_value = ColInfo(Ident("PLACE.HOLDER"), ValidSqlType("PLACE.HOLDER"))
-        for (name, sqltype) in _keys.items():
-            validated_name = self._validate_identifier(identifier=name)
-            in_keys = key_columns.get(validated_name, unset_value)
-            if in_keys is not unset_value:
-                original_name = in_keys.original
-                dup_cols = dup_key_columns.get(
-                    validated_name,
-                    IdentClash(original_name, frozenset()),
+            self.key_columns = {c: ValidSqlType("") for c in self.key_idents}
+        if value_types:
+            if not isinstance(value_types, value_type):
+                raise CacheDictMappingIncorrectValueTypesTypeException(
+                    {"value_types": type(value_types), "value_type": value_type},
                 )
-                dup_key_columns[validated_name] = IdentClash(
-                    original_name,
-                    dup_cols.clashes | frozenset([name]),
-                )
+            self.value_columns = self._column_info(dataclasses.asdict(value_types))
+        else:
+            self.value_columns = {c: ValidSqlType("") for c in self.value_idents}
+
+    @classmethod
+    def _column_info(cls, types: typing.Mapping[str, SqlTypeIn], /) -> ColMapping:
+        columns: typing.Dict[ValidIdent, ValidSqlType] = {}
+        for (c, t) in types.items():
+            c = cls._validate_ident(Ident(c))
+            if t:
+                if not isinstance(t, str):
+                    raise CacheDictMappingInvalidSQLParamTypeException(
+                        {"type": type(t)},
+                    )
+                c_sqltype = cls._validate_sqltype(SqlType(t))
             else:
-                self._handle_column(
-                    column_dict=key_columns,
-                    original_name=name,
-                    validated_name=validated_name,
-                    sqltype=sqltype,
-                )
+                c_sqltype = ValidSqlType("")
+            columns[c] = c_sqltype
+        return columns
 
-        for (name, sqltype) in _values.items():
-            validated_name = self._validate_identifier(identifier=name)
-            in_keys = key_columns.get(validated_name, unset_value)
-            in_values = value_columns.get(validated_name, unset_value)
-            if in_keys is not unset_value:
-                original_name = in_keys.original
-                keyval_cols = keyval_columns.get(
-                    validated_name,
-                    IdentClash(original_name, frozenset()),
-                )
-                keyval_columns[validated_name] = IdentClash(
-                    original_name,
-                    keyval_cols.clashes | frozenset([name]),
-                )
-            elif in_values is not unset_value:
-                original_name = in_values.original
-                val_cols = dup_value_columns.get(
-                    validated_name,
-                    IdentClash(original_name, frozenset()),
-                )
-                dup_value_columns[validated_name] = IdentClash(
-                    original_name,
-                    val_cols.clashes | frozenset([name]),
-                )
-            else:
-                self._handle_column(
-                    column_dict=value_columns,
-                    original_name=name,
-                    validated_name=validated_name,
-                    sqltype=sqltype,
-                )
-
-        # This is somewhat abusing the exception handling process...
-        # Note we're treating exceptions as a stack so doing this in the
-        # reversed order
-        to_raise = None
-
-        if dup_value_columns:
-            val_strs: typing.List[str] = []
-            for (key, val) in dup_value_columns.items():
-                dup_idents = '", "'.join(val.clashes)
-                val_str = (
-                    f"column [{key}] (input [{val.original}]) clashes with "
-                    f'["{dup_idents}"]'
-                )
-                val_strs.append(val_str)
-            dup_val_str = ", ".join(val_strs)
-            to_raise = CacheDictMappingDuplicateValuesException(
-                {"dups": dup_val_str},
-            )
-
-        if keyval_columns:
-            keyval_str = '"' + '", "'.join(keyval_columns) + '"'
-            ex = CacheDictMappingKeyValOverlapException({"columns": keyval_str})
-            ex.__cause__ = to_raise
-            to_raise = ex
-
-        if dup_key_columns:
-            key_strs: typing.List[str] = []
-            for (key, val) in dup_key_columns.items():
-                dup_idents = '", "'.join(val.clashes)
-                key_str = (
-                    f"column [{key}] (input [{val.original}]) clashes with "
-                    f'["{dup_idents}"]'
-                )
-                key_strs.append(key_str)
-            dup_key_str = ", ".join(key_strs)
-            ex = CacheDictMappingDuplicateKeysException(
-                {"dups": dup_key_str},
-            )
-            ex.__cause__ = to_raise
-            to_raise = ex
-
-        # TODO add some testing around the handling of multierrors...
-        if to_raise:
-            raise to_raise
-
-        self.table_ident = validated_table
-        self.keys = {
-            ident: col_info.sqltype for (ident, col_info) in key_columns.items()
-        }
-        self.values = {
-            ident: col_info.sqltype for (ident, col_info) in value_columns.items()
-        }
-
-        key_cols = self.namedtuple_identifiers(key_columns)
-        value_cols = self.namedtuple_identifiers(value_columns)
-        items_cols = key_cols + value_cols
-
-        KeyTuple = typing.NamedTuple("KeyTuple", key_cols)  # type: ignore # noqa: N806
-        self.KeyTuple = KeyTuple
-
-        ValueTuple = typing.NamedTuple(  # type: ignore # noqa: N806
-            "ValueTuple",
-            value_cols,
-        )
-        self.ValueTuple = ValueTuple
-
-        ItemsTuple = typing.NamedTuple(  # type: ignore # noqa: N806
-            "ItemsTuple",
-            items_cols,
-        )
-        self.ItemsTuple = ItemsTuple
-
-    @staticmethod
-    def namedtuple_identifiers(
-        d: typing.Mapping[ValidIdent, ColInfo],
+    @classmethod
+    def _validate_idents(
+        cls,
+        fields: typing.Iterable[dataclasses.Field],
         /,
-    ) -> typing.List[typing.Tuple[str, object]]:
-        quoted_keys = d.keys()
-        unquoted_keys = [k.replace('"', "") for k in quoted_keys]
-        sorted_keys = sorted(unquoted_keys)
-        return [(k, typing.Any) for k in sorted_keys]
+    ) -> typing.FrozenSet[ValidIdent]:
+        field_names = [f.name for f in fields]
+        valid_idents: typing.FrozenSet[ValidIdent] = frozenset([])
+        for field in field_names:
+            ident = Ident(field)
+            valid_ident = cls._validate_ident(ident)
+            valid_idents |= {valid_ident}
+        return valid_idents
+
+    # fmt: off
+    _IDENTIFIER_RE_DEFN: typing.ClassVar[str] = (
+        r"^               # start of string""\n"
+        r"[a-z]           # start with a lowercase ascii letter""\n"
+        r"[a-z0-9_]{0,62} # followed by 0-62 lowercase ascii/numbers/underscores""\n"
+        r"$               # end of string""\n"
+    )
+    # fmt: on
+
+    _IDENTIFIER_PATTERN: typing.ClassVar[typing.Pattern[str]] = re.compile(
+        _IDENTIFIER_RE_DEFN,
+        flags=(re.ASCII | re.VERBOSE),
+    )
+
+    @classmethod
+    def _validate_ident(cls, ident: Ident, /) -> ValidIdent:
+        if not ident:
+            raise CacheDictMappingNoIdentifierProvidedException(
+                {"identifier": ident},
+            )
+
+        match = cls._IDENTIFIER_PATTERN.match(ident)
+        if not match:
+            raise CacheDictMappingInvalidIdentifierException(
+                {"identifier": ident, "re": cls._IDENTIFIER_RE_DEFN},
+            )
+
+        return ValidIdent(f'"{ident}"')
+
+    # fmt: off
+    _SQLTYPE_RE_DEFN: typing.ClassVar[str] = (
+        r"^               # start of string""\n"
+        r"[A-Z]           # start with a uppercase ascii letter""\n"
+        r"[A-Z0-9_]{0,62} # followed by 0-62 uppercase ascii/numbers/underscores""\n"
+        r"$               # end of string""\n"
+    )
+    # fmt: on
+
+    _SQLTYPE_PATTERN: typing.ClassVar[typing.Pattern[str]] = re.compile(
+        _SQLTYPE_RE_DEFN,
+        flags=(re.ASCII | re.VERBOSE),
+    )
+
+    @classmethod
+    def _validate_sqltype(cls, sqltype: SqlType, /) -> ValidSqlType:
+        match = cls._SQLTYPE_PATTERN.match(sqltype)
+        if not match:
+            raise CacheDictMappingInvalidSQLTypeException(
+                {"sqltype": sqltype, "re": cls._SQLTYPE_RE_DEFN},
+            )
+
+        if sqltype not in sqlite3.converters:
+            log.warning(
+                (
+                    "sqltype [%s] is not currently present in sqlite3.converters. "
+                    "if sqlite cannot default convert, it may be returned as bytes()"
+                ),
+                sqltype,
+            )
+        return ValidSqlType(sqltype)
 
     # fmt: off
     _CREATE_FMT: typing.ClassVar[str] = (
@@ -311,14 +308,14 @@ class CacheDictMapping:
         if self._create_statement:
             return self._create_statement
 
-        key_columns = sorted(self.keys.keys())
+        key_columns = sorted(self.key_idents)
 
-        value_columns = sorted(self.values.keys())
+        value_columns = sorted(self.value_idents)
 
         # fmt: off
         key_column_definitions = ", -- primary key\n    ".join(
             [
-                f"{column} {self.keys[column]}"
+                f"{column} {self.key_columns[column]}"
                 for column in key_columns
             ],
         )
@@ -327,7 +324,7 @@ class CacheDictMapping:
         if value_columns:
             value_column_definitions = ", -- value\n    ".join(
                 [
-                    f"{column} {self.values[column]}"
+                    f"{column} {self.value_columns[column]}"
                     for column in value_columns
                 ],
             )
@@ -436,9 +433,9 @@ class CacheDictMapping:
         if self._upsert_statement:
             return self._upsert_statement
 
-        key_column_names = sorted(self.keys.keys())
+        key_column_names = sorted(self.key_idents)
 
-        value_column_names = sorted(self.values.keys())
+        value_column_names = sorted(self.value_idents)
 
         key_columns = ", -- key\n    ".join(key_column_names)
         all_columns = key_columns
@@ -505,14 +502,14 @@ class CacheDictMapping:
         if self._select_statement:
             return self._select_statement
 
-        value_column_names = sorted(self.values.keys())
+        value_column_names = sorted(self.value_idents)
         if value_column_names:
             value_columns = ", -- value\n    ".join(value_column_names)
             value_columns += " -- value"
         else:
             value_columns = "null -- no value columns so use null"
 
-        key_column_names = sorted(self.keys.keys())
+        key_column_names = sorted(self.key_idents)
         key_columns = ", -- key\n    ".join(key_column_names)
         key_columns += " -- key"
 
@@ -552,7 +549,7 @@ class CacheDictMapping:
         if self._remove_statement:
             return self._remove_statement
 
-        key_column_names = sorted(self.keys.keys())
+        key_column_names = sorted(self.key_idents)
         key_columns = ", -- key\n    ".join(key_column_names)
         key_columns += " -- key"
 
@@ -610,7 +607,7 @@ class CacheDictMapping:
         if self._keys_statement:
             return self._keys_statement
 
-        key_column_names = sorted(self.keys.keys())
+        key_column_names = sorted(self.key_idents)
         key_columns = ", -- key\n    ".join(key_column_names)
         key_columns += " -- key"
 
@@ -642,10 +639,10 @@ class CacheDictMapping:
         if self._items_statement:
             return self._items_statement
 
-        key_column_names = sorted(self.keys.keys())
+        key_column_names = sorted(self.key_idents)
         all_columns = ", -- key\n    ".join(key_column_names)
 
-        value_column_names = sorted(self.values.keys())
+        value_column_names = sorted(self.value_idents)
         if value_column_names:
             all_columns += ", -- key\n    "
             all_columns += ", -- value\n    ".join(value_column_names)
@@ -680,7 +677,7 @@ class CacheDictMapping:
         if self._values_statement:
             return self._values_statement
 
-        value_column_names = sorted(self.values.keys())
+        value_column_names = sorted(self.value_idents)
         if value_column_names:
             value_columns = ", -- value\n    ".join(value_column_names)
             value_columns += " -- value"
@@ -700,117 +697,3 @@ class CacheDictMapping:
         values_statement = SqlStatement("\n".join(values_lines))
         self._values_statement = values_statement
         return values_statement
-
-    @classmethod
-    def _handle_column(
-        cls,
-        *,
-        column_dict: typing.Dict[ValidIdent, ColInfo],
-        original_name: Ident,
-        validated_name: ValidIdent,
-        sqltype: typing.Optional[SqlType],
-    ) -> None:
-        validated_sqltype = cls._validate_sqltype(sqltype=sqltype)
-        column_dict[validated_name] = ColInfo(original_name, validated_sqltype)
-
-    # fmt: off
-    _IDENTIFIER_RE_DEFN: typing.ClassVar[str] = (
-        r"^               # start of string""\n"
-        r"[a-z]           # start with an ascii letter""\n"
-        r"[a-z0-9_]{0,62} # followed by up to 62 alphanumeric or underscores""\n"
-        r"$               # end of string""\n"
-    )
-    # fmt: on
-
-    _IDENTIFIER_PATTERN: typing.ClassVar[typing.Pattern[str]] = re.compile(
-        _IDENTIFIER_RE_DEFN,
-        flags=(re.ASCII | re.IGNORECASE | re.VERBOSE),
-    )
-
-    @classmethod
-    def _validate_identifier(cls, *, identifier: Ident) -> ValidIdent:
-        if not identifier:
-            raise CacheDictMappingNoIdentifierProvidedException(
-                {"identifier": identifier},
-            )
-
-        if identifier != identifier.strip():
-            log.info(
-                (
-                    "sqlitecaching identifier provided: [%s] has whitespace "
-                    "which will be stripped."
-                ),
-                identifier,
-            )
-            identifier = Ident(identifier.strip())
-        match = cls._IDENTIFIER_PATTERN.match(identifier)
-        if not match:
-            fmt = (
-                "sqlitecaching identifier provided: [%s] does not match "
-                "requirements [%s]"
-            )
-            log.error(
-                fmt,
-                identifier,
-                cls._IDENTIFIER_RE_DEFN,
-            )
-            raise CacheDictMappingInvalidIdentifierException(
-                {"identifier": identifier, "re": cls._IDENTIFIER_RE_DEFN},
-            )
-        lower_identifier = identifier.lower()
-        if identifier != lower_identifier:
-            log.warning(
-                (
-                    "sqlitecaching identifier [%s] is not lowercase. Using "
-                    "lowercased value [%s]"
-                ),
-                identifier,
-                lower_identifier,
-            )
-
-        return ValidIdent(f'"{lower_identifier}"')
-
-    @classmethod
-    def _validate_sqltype(cls, *, sqltype: typing.Optional[SqlType]) -> ValidSqlType:
-        if not sqltype:
-            log.info(
-                "sqltype provided [%s] will be replaced with an empty string",
-                sqltype,
-            )
-            sqltype = SqlType("")
-        elif sqltype != sqltype.strip():
-            log.info(
-                (
-                    "sqlitecaching sqltype provided: [%s] has whitespace "
-                    "which will be stripped."
-                ),
-                sqltype,
-            )
-            sqltype = SqlType(sqltype.strip())
-        if not sqltype:
-            return ValidSqlType("")
-        match = cls._IDENTIFIER_PATTERN.match(sqltype)
-        if not match:
-            raise CacheDictMappingInvalidSQLTypeException(
-                {"sqltype": sqltype, "re": cls._IDENTIFIER_RE_DEFN},
-            )
-        upper_sqltype = ValidSqlType(sqltype.upper())
-        if sqltype != upper_sqltype:
-            log.warning(
-                (
-                    "sqlitecaching sqltype [%s] is not uppercase. Using "
-                    "uppercased value [%s]"
-                ),
-                sqltype,
-                upper_sqltype,
-            )
-
-        if upper_sqltype not in sqlite3.converters:
-            log.warning(
-                (
-                    "sqltype [%s] is not currently present in sqlite3.converters. "
-                    "if sqlite cannot default convert, it may be returned as bytes()"
-                ),
-                upper_sqltype,
-            )
-        return upper_sqltype
