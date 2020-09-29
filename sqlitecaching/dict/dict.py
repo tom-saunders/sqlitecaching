@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import enum
 import functools
 import logging
@@ -302,7 +303,9 @@ class CacheDict(typing.Mapping[KT, VT]):
         upsert_stmt = self.mapping.upsert_statement()
         cursor = self.conn.execute(
             upsert_stmt,
-            dataclasses.astuple(key) + dataclasses.astuple(value),
+            (datetime.datetime.now(),)
+            + dataclasses.astuple(key)
+            + dataclasses.astuple(value),
         )
         try:
             cursor.fetchone()

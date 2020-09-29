@@ -140,11 +140,15 @@ class CacheDictMapping(typing.Generic[KT, VT]):
     _delete_statement: typing.Optional[SqlStatement] = None
     _upsert_statement: typing.Optional[SqlStatement] = None
     _select_statement: typing.Optional[SqlStatement] = None
+    _tceles_statement: typing.Optional[SqlStatement] = None
     _remove_statement: typing.Optional[SqlStatement] = None
     _length_statement: typing.Optional[SqlStatement] = None
     _keys_statement: typing.Optional[SqlStatement] = None
+    _syek_statement: typing.Optional[SqlStatement] = None
     _items_statement: typing.Optional[SqlStatement] = None
+    _smeti_statement: typing.Optional[SqlStatement] = None
     _values_statement: typing.Optional[SqlStatement] = None
+    _seulav_statement: typing.Optional[SqlStatement] = None
 
     def __init__(
         self,
@@ -290,6 +294,8 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "-- sqlitecaching create table\n"
         "CREATE TABLE IF NOT EXISTS {table_identifier}\n"
         "(\n"
+        "    -- timestamp (for ordering)\n"
+        "    __timestamp TIMESTAMP,\n"
         "    -- keys\n"
         "    {key_column_definitions}\n"
         "    -- values\n"
@@ -407,24 +413,44 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "-- sqlitecaching insert or update into table\n"
         "INSERT INTO {table_identifier}\n"
         "(\n"
+        "    -- timestamp\n"
+        "    __timestamp,\n"
         "    -- all columns\n"
         "    {all_columns}\n"
         ") VALUES (\n"
+        "    -- timestamp\n"
+        "    ?,\n"
         "    -- all values\n"
         "    {all_values}\n"
         ") ON CONFLICT {upsert_stmt}\n"
         ";\n"
     )
-    _UPSERT_STMT_FMT: typing.ClassVar[str] = (
+    _UPSERT_WITH_VALUES_STMT_FMT: typing.ClassVar[str] = (
         "(\n"
         "    -- key columns\n"
         "    {key_columns}\n"
         ") DO UPDATE SET (\n"
+        "    -- timestamp\n"
+        "    __timestamp,\n"
         "    -- value columns\n"
         "    {value_columns}\n"
         ") = (\n"
+        "    -- timestamp\n"
+        "    excluded.__timestamp,\n"
         "    -- value values\n"
         "    {value_values}\n"
+        ")"
+    )
+    _UPSERT_WITHOUT_VALUES_STMT_FMT: typing.ClassVar[str] = (
+        "(\n"
+        "    -- key columns\n"
+        "    {key_columns}\n"
+        ") DO UPDATE SET (\n"
+        "    -- timestamp\n"
+        "    __timestamp\n"
+        ") = (\n"
+        "    -- timestamp\n"
+        "    excluded.__timestamp\n"
         ")"
     )
     # fmt: on
@@ -452,7 +478,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             )
             value_values += " -- value"
 
-            upsert_stmt = self._UPSERT_STMT_FMT.format(
+            upsert_stmt = self._UPSERT_WITH_VALUES_STMT_FMT.format(
                 value_columns=value_columns,
                 value_values=value_values,
                 key_columns=key_columns,
@@ -460,8 +486,9 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         else:
             all_columns += " -- key\n    "
             all_columns += "-- no values defined"
-            upsert_stmt = "DO NOTHING\n"
-            upsert_stmt += "-- no conflict action as no values defined"
+            upsert_stmt = self._UPSERT_WITHOUT_VALUES_STMT_FMT.format(
+                key_columns=key_columns,
+            )
 
         all_values = ",\n    ".join(
             ["?" for _ in range(0, len(key_column_names) + len(value_column_names))],
@@ -494,20 +521,26 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         ") = (\n"
         "    -- key values\n"
         "    {key_values}\n"
-        ");\n"
+        ") ORDER BY __timestamp {order};\n"
     )
     # fmt: on
 
-    def select_statement(self) -> SqlStatement:
-        if self._select_statement:
-            return self._select_statement
+    def select_statement(self, asc: bool = True, /) -> SqlStatement:
+        if asc:
+            if self._select_statement:
+                return self._select_statement
+            order = "ASC"
+        else:
+            if self._tceles_statement:
+                return self._tceles_statement
+            order = "DESC"
 
         value_column_names = sorted(self.value_idents)
         if value_column_names:
             value_columns = ", -- value\n    ".join(value_column_names)
             value_columns += " -- value"
         else:
-            value_columns = "null -- no value columns so use null"
+            value_columns = "null -- no value columns so just null"
 
         key_column_names = sorted(self.key_idents)
         key_columns = ", -- key\n    ".join(key_column_names)
@@ -520,6 +553,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             value_columns=value_columns,
             key_columns=key_columns,
             key_values=key_values,
+            order=order,
         )
 
         select_lines = []
@@ -528,7 +562,12 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         # needed for trailing newline
         select_lines.append("")
         select_statement = SqlStatement("\n".join(select_lines))
-        self._select_statement = select_statement
+
+        if asc:
+            self._select_statement = select_statement
+        else:
+            self._tceles_statement = select_statement
+
         return select_statement
 
     # fmt: off
@@ -599,13 +638,20 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "-- sqlitecaching table keys\n"
         "SELECT\n"
         "    {key_columns}\n"
-        "FROM {table_identifier};\n"
+        "FROM {table_identifier}\n"
+        "ORDER BY __timestamp {order};\n"
     )
     # fmt: on
 
-    def keys_statement(self) -> SqlStatement:
-        if self._keys_statement:
-            return self._keys_statement
+    def keys_statement(self, asc: bool = True, /) -> SqlStatement:
+        if asc:
+            if self._keys_statement:
+                return self._keys_statement
+            order = "ASC"
+        else:
+            if self._syek_statement:
+                return self._syek_statement
+            order = "DESC"
 
         key_column_names = sorted(self.key_idents)
         key_columns = ", -- key\n    ".join(key_column_names)
@@ -614,6 +660,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         unstripped_keys_statement = self._KEYS_FMT.format(
             key_columns=key_columns,
             table_identifier=self.table_ident,
+            order=order,
         )
 
         keys_lines = []
@@ -622,7 +669,12 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         # needed for trailing newline
         keys_lines.append("")
         keys_statement = SqlStatement("\n".join(keys_lines))
-        self._keys_statement = keys_statement
+
+        if asc:
+            self._keys_statement = keys_statement
+        else:
+            self._syek_statement = keys_statement
+
         return keys_statement
 
     # fmt: off
@@ -631,13 +683,20 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "SELECT\n"
         "    -- all columns\n"
         "    {all_columns}\n"
-        "FROM {table_identifier};\n"
+        "FROM {table_identifier}\n"
+        "ORDER BY __timestamp {order};\n"
     )
     # fmt: on
 
-    def items_statement(self) -> SqlStatement:
-        if self._items_statement:
-            return self._items_statement
+    def items_statement(self, asc: bool = True, /) -> SqlStatement:
+        if asc:
+            if self._items_statement:
+                return self._items_statement
+            order = "ASC"
+        else:
+            if self._smeti_statement:
+                return self._smeti_statement
+            order = "DESC"
 
         key_column_names = sorted(self.key_idents)
         all_columns = ", -- key\n    ".join(key_column_names)
@@ -653,6 +712,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         unstripped_items_statement = self._ITEMS_FMT.format(
             all_columns=all_columns,
             table_identifier=self.table_ident,
+            order=order,
         )
 
         items_lines = []
@@ -661,7 +721,12 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         # needed for trailing newline
         items_lines.append("")
         items_statement = SqlStatement("\n".join(items_lines))
-        self._items_statement = items_statement
+
+        if asc:
+            self._items_statement = items_statement
+        else:
+            self._smeti_statement = items_statement
+
         return items_statement
 
     # fmt: off

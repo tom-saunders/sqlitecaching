@@ -4,4 +4,5 @@ SELECT
     "a", -- key
     "b", -- key
     "c" -- value
-FROM "aa_bb__cc";
+FROM "aa_bb__cc"
+ORDER BY __timestamp ASC;

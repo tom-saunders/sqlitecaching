@@ -2,4 +2,5 @@
 SELECT
     -- all columns
     "a" -- key
-FROM "aa";
+FROM "aa"
+ORDER BY __timestamp ASC;

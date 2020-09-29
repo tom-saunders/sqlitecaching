@@ -10,4 +10,4 @@ WHERE (
     -- key values
     ?,
     ?
-);
+) ORDER BY __timestamp ASC;

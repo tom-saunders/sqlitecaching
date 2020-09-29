@@ -1,6 +1,6 @@
 -- sqlitecaching retrieve from table
 SELECT
-    null -- no value columns so use null
+    null -- no value columns so just null
 FROM "aa_bb"
 WHERE (
     -- key columns
@@ -10,4 +10,4 @@ WHERE (
     -- key values
     ?,
     ?
-);
+) ORDER BY __timestamp ASC;
