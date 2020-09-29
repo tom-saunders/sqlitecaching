@@ -136,6 +136,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             "keys_statement",
             "items_statement",
             "values_statement",
+            "bool_statement",
         ],
     )
     ordered_statement_types: typing.ClassVar[typing.Iterable[str]] = frozenset(

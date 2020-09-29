@@ -149,6 +149,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
     _smeti_statement: typing.Optional[SqlStatement] = None
     _values_statement: typing.Optional[SqlStatement] = None
     _seulav_statement: typing.Optional[SqlStatement] = None
+    _bool_statement: typing.Optional[SqlStatement] = None
 
     def __init__(
         self,
@@ -540,7 +541,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             value_columns = ", -- value\n    ".join(value_column_names)
             value_columns += " -- value"
         else:
-            value_columns = "null -- no value columns so just null"
+            value_columns = "NULL -- no value columns so just NULL"
 
         key_column_names = sorted(self.key_idents)
         key_columns = ", -- key\n    ".join(key_column_names)
@@ -678,6 +679,27 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         return keys_statement
 
     # fmt: off
+    _BOOL_FMT: typing.ClassVar[str] = (
+        "-- sqlitecaching table bool\n"
+        "-- either returns nothing or one NULL to indicate that some value is stored\n"
+        "SELECT\n"
+        "    NULL\n"
+        "FROM {table_identifier}\n"
+        "LIMIT 1;\n"
+    )
+    # fmt: on
+
+    def bool_statement(self) -> SqlStatement:
+        if self._bool_statement:
+            return self._bool_statement
+
+        bool_statement = SqlStatement(
+            self._BOOL_FMT.format(table_identifier=self.table_ident),
+        )
+        self._bool_statement = bool_statement
+        return bool_statement
+
+    # fmt: off
     _ITEMS_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching table items\n"
         "SELECT\n"
@@ -754,7 +776,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             value_columns = ", -- value\n    ".join(value_column_names)
             value_columns += " -- value"
         else:
-            value_columns = "null -- null value to permit querying"
+            value_columns = "NULL -- NULL value to permit querying"
 
         unstripped_values_statement = self._VALUES_FMT.format(
             value_columns=value_columns,

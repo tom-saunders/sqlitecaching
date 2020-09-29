@@ -79,7 +79,7 @@ class Metadata(typing.NamedTuple):
     count_column: str
 
 
-class CacheDict(typing.Mapping[KT, VT]):
+class CacheDict(typing.Dict[KT, VT]):
     _internally_constructed: typing.ClassVar[typing.Any] = object()
     _raise_on_filtered_sqlite_params: typing.ClassVar[bool] = False
 
@@ -189,6 +189,16 @@ class CacheDict(typing.Mapping[KT, VT]):
         cursor = self.conn.execute(length_stmt)
         row = cursor.fetchone()
         return row["c"]
+
+    def __bool__(self) -> bool:
+        log.debug("bool [%#0x]", id(self))
+        bool_stmt = self.mapping.bool_statement()
+        cursor = self.conn.execute(bool_stmt)
+        row = cursor.fetchone()
+        if row:
+            return True
+        else:
+            return False
 
     def __delitem__(self, key: KT, /) -> None:
         log.debug("delete [%#0x] key: [%s]", id(self), key)

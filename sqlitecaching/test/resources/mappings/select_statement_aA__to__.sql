@@ -1,6 +1,6 @@
 -- sqlitecaching retrieve from table
 SELECT
-    null -- no value columns so just null
+    NULL -- no value columns so just NULL
 FROM "aa"
 WHERE (
     -- key columns
