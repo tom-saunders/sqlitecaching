@@ -525,7 +525,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
     )
     # fmt: on
 
-    def select_statement(self, asc: bool = True, /) -> SqlStatement:
+    def select_statement(self, *, asc: bool = True) -> SqlStatement:
         if asc:
             if self._select_statement:
                 return self._select_statement
@@ -643,7 +643,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
     )
     # fmt: on
 
-    def keys_statement(self, asc: bool = True, /) -> SqlStatement:
+    def keys_statement(self, *, asc: bool = True) -> SqlStatement:
         if asc:
             if self._keys_statement:
                 return self._keys_statement
@@ -688,7 +688,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
     )
     # fmt: on
 
-    def items_statement(self, asc: bool = True, /) -> SqlStatement:
+    def items_statement(self, *, asc: bool = True) -> SqlStatement:
         if asc:
             if self._items_statement:
                 return self._items_statement
@@ -739,7 +739,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
     )
     # fmt: on
 
-    def values_statement(self, asc: bool = True) -> SqlStatement:
+    def values_statement(self, *, asc: bool = True) -> SqlStatement:
         if asc:
             if self._values_statement:
                 return self._values_statement

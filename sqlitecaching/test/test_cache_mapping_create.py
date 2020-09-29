@@ -503,7 +503,7 @@ class TestCacheDictMapping(SqliteCachingTestBase):
 
             with open(inverted_statement_path, "r") as inverted_statement_file:
                 inverted_statement = inverted_statement_file.read()
-            actual_inverted_statement = getattr(actual, statement_type)(False)
+            actual_inverted_statement = getattr(actual, statement_type)(asc=False)
             self.assertEqual(inverted_statement, actual_inverted_statement)
 
         log.debug("check statement caching")
@@ -516,7 +516,9 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         self.assertIs(actual_statement, actual_second_statement)
 
         if statement_type in self.ordered_statement_types:
-            actual_second_inverted_statement = getattr(actual, statement_type)(False)
+            actual_second_inverted_statement = getattr(actual, statement_type)(
+                asc=False,
+            )
             self.assertIs(actual_inverted_statement, actual_second_inverted_statement)
 
     @parameterized.parameterized.expand(create_mapping_fail_params)
