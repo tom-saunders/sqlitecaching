@@ -734,13 +734,20 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "-- sqlitecaching table values\n"
         "SELECT\n"
         "    {value_columns}\n"
-        "FROM {table_identifier};\n"
+        "FROM {table_identifier}\n"
+        "ORDER BY __timestamp {order};\n"
     )
     # fmt: on
 
-    def values_statement(self) -> SqlStatement:
-        if self._values_statement:
-            return self._values_statement
+    def values_statement(self, asc: bool = True) -> SqlStatement:
+        if asc:
+            if self._values_statement:
+                return self._values_statement
+            order = "ASC"
+        else:
+            if self._seulav_statement:
+                return self._seulav_statement
+            order = "DESC"
 
         value_column_names = sorted(self.value_idents)
         if value_column_names:
@@ -752,6 +759,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         unstripped_values_statement = self._VALUES_FMT.format(
             value_columns=value_columns,
             table_identifier=self.table_ident,
+            order=order,
         )
 
         values_lines = []
@@ -760,5 +768,10 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         # needed for trailing newline
         values_lines.append("")
         values_statement = SqlStatement("\n".join(values_lines))
-        self._values_statement = values_statement
+
+        if asc:
+            self._values_statement = values_statement
+        else:
+            self._seulav_statement = values_statement
+
         return values_statement

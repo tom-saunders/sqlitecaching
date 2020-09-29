@@ -1,4 +1,5 @@
 -- sqlitecaching table values
 SELECT
     "c" -- value
-FROM "aa__c_";
+FROM "aa__c_"
+ORDER BY __timestamp ASC;
