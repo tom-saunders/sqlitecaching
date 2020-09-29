@@ -124,18 +124,28 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         super().__init__(*args, **kwargs)
         self.res_dir += "mappings/"
 
-    statement_types = [
-        "create_statement",
-        "clear_statement",
-        "delete_statement",
-        "upsert_statement",
-        "select_statement",
-        "remove_statement",
-        "length_statement",
-        "keys_statement",
-        "items_statement",
-        "values_statement",
-    ]
+    statement_types: typing.ClassVar[typing.FrozenSet[str]] = frozenset(
+        [
+            "create_statement",
+            "clear_statement",
+            "delete_statement",
+            "upsert_statement",
+            "select_statement",
+            "remove_statement",
+            "length_statement",
+            "keys_statement",
+            "items_statement",
+            "values_statement",
+        ],
+    )
+    ordered_statement_types: typing.ClassVar[typing.Iterable[str]] = frozenset(
+        [
+            "select_statement",
+            "keys_statement",
+            "items_statement",
+            "values_statement",
+        ],
+    )
 
     success_mapping_definitions: typing.Iterable[InputDef] = [
         InputDef(
@@ -434,11 +444,8 @@ class TestCacheDictMapping(SqliteCachingTestBase):
                 statement_type=statement_type,
             ),
             mapping=input_def.mapping,
-            expected="{statement_type}_{result_name}.sql".format(
-                statement_type=statement_type,
-                result_name=input_def.result,
-            ),
-            meta=statement_type,
+            expected=statement_type,
+            meta=input_def.result,
         )
         for (input_def, statement_type) in itertools.product(
             success_mapping_definitions,
@@ -460,8 +467,8 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         self,
         name: str,
         mapping: In,
-        expected: str,
         statement_type: str,
+        result_name: str,
     ):
         log.debug("create CacheDictMapping")
         actual = CacheDictMapping(  # typing: ignore
@@ -472,12 +479,32 @@ class TestCacheDictMapping(SqliteCachingTestBase):
             value_types=mapping.value_types,
         )
         log.debug("created CacheDictMapping: %s", actual)
+        expected = f"{statement_type}_{result_name}.sql"
 
         expected_statement_path = self.res_dir + expected
         with open(expected_statement_path, "r") as expected_statement_file:
             expected_statement = expected_statement_file.read()
         actual_statement = getattr(actual, statement_type)()
         self.assertEqual(expected_statement, actual_statement)
+
+        if statement_type in self.ordered_statement_types:
+            statement_parts = statement_type.split("_")
+            self.assertEqual(
+                len(statement_parts),
+                2,
+                "expected 2 statment parts separated by an underscore",
+            )
+            inverted_statement_type = statement_parts[0][::-1]
+            inverted_statement_type += "_"
+            inverted_statement_type += statement_parts[1]
+            inverted = f"{inverted_statement_type}_{result_name}.sql"
+
+            inverted_statement_path = self.res_dir + inverted
+
+            with open(inverted_statement_path, "r") as inverted_statement_file:
+                inverted_statement = inverted_statement_file.read()
+            actual_inverted_statement = getattr(actual, statement_type)(False)
+            self.assertEqual(inverted_statement, actual_inverted_statement)
 
         log.debug("check statement caching")
         # since all the statements use the table_ident, changing it will
@@ -487,6 +514,10 @@ class TestCacheDictMapping(SqliteCachingTestBase):
         actual.table_ident = ""  # type: ignore
         actual_second_statement = getattr(actual, statement_type)()
         self.assertIs(actual_statement, actual_second_statement)
+
+        if statement_type in self.ordered_statement_types:
+            actual_second_inverted_statement = getattr(actual, statement_type)(False)
+            self.assertIs(actual_inverted_statement, actual_second_inverted_statement)
 
     @parameterized.parameterized.expand(create_mapping_fail_params)
     def test_create_mapping_fail(
