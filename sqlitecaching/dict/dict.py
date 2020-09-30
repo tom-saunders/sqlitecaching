@@ -106,6 +106,7 @@ class CacheDict(typing.Dict[KT, VT]):
 
     conn: sqlite3.Connection
     mapping: CacheDictMapping
+    filepath: str
     read_only: bool
     _finalize: weakref.finalize
 
@@ -114,6 +115,7 @@ class CacheDict(typing.Dict[KT, VT]):
         *,
         conn: sqlite3.Connection,
         mapping: CacheDictMapping[KT, VT],
+        filepath: str,
         read_only: bool = False,
         **kwargs,
     ) -> None:
@@ -145,6 +147,7 @@ class CacheDict(typing.Dict[KT, VT]):
             metadata=metadata,
         )
         self.mapping = mapping
+        self.filepath = filepath
         self.read_only = read_only
 
         if not read_only:
@@ -368,10 +371,14 @@ class CacheDict(typing.Dict[KT, VT]):
             # to stderr
             log.error("exception when closing conn: [%s]", conn, exc_info=True)
 
-    def _get_key_type_mapping(self: "CacheDict[KT, VT]"):
+    def _get_key_type_mapping(
+        self: "CacheDict[KT, VT]",
+    ) -> typing.Mapping[str, typing.Type]:
         return {f.name: f.type for f in dataclasses.fields(self.mapping.KeyType)}
 
-    def _get_value_type_mapping(self: "CacheDict[KT, VT]"):
+    def _get_value_type_mapping(
+        self: "CacheDict[KT, VT]",
+    ) -> typing.Mapping[str, typing.Type]:
         return {f.name: f.type for f in dataclasses.fields(self.mapping.ValueType)}
 
     @classmethod
@@ -496,6 +503,7 @@ class CacheDict(typing.Dict[KT, VT]):
         cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
+            filepath=cls.ANON_MEM_PATH,
             _cd_internal_flag=cls._internally_constructed,
         )
 
@@ -519,6 +527,7 @@ class CacheDict(typing.Dict[KT, VT]):
         cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
+            filepath=cls.ANON_DISK_PATH,
             _cd_internal_flag=cls._internally_constructed,
         )
 
@@ -545,6 +554,7 @@ class CacheDict(typing.Dict[KT, VT]):
         cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
+            filepath=uri_path,
             read_only=True,
             _cd_internal_flag=cls._internally_constructed,
         )
@@ -576,6 +586,7 @@ class CacheDict(typing.Dict[KT, VT]):
         cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
+            filepath=uri_path,
             _cd_internal_flag=cls._internally_constructed,
         )
 
@@ -595,6 +606,7 @@ class CacheDict(typing.Dict[KT, VT]):
         cache_dict = CacheDict[KT, VT](
             conn=conn,
             mapping=mapping,
+            filepath="UNKNOWN(_create_from_conn)",
             _cd_internal_flag=cls._internally_constructed,
         )
 
