@@ -21,14 +21,10 @@ INSERT INTO "aa_bb__cc_dd"
     "a", -- key
     "b" -- key
 ) DO UPDATE SET (
-    -- timestamp
-    __timestamp,
     -- value columns
     "c", -- value
     "d" -- value
 ) = (
-    -- timestamp
-    excluded.__timestamp,
     -- value values
     excluded."c", -- value
     excluded."d" -- value

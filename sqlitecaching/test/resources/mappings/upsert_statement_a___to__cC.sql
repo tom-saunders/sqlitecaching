@@ -16,13 +16,9 @@ INSERT INTO "a___cc"
     -- key columns
     "a" -- key
 ) DO UPDATE SET (
-    -- timestamp
-    __timestamp,
     -- value columns
     "c" -- value
 ) = (
-    -- timestamp
-    excluded.__timestamp,
     -- value values
     excluded."c" -- value
 )

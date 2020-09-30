@@ -71,12 +71,22 @@ KT = typing.TypeVar("KT")
 VT = typing.TypeVar("VT")
 
 
-class Metadata(typing.NamedTuple):
-    key_tuple: typing.Type
+@dataclasses.dataclass(frozen=True)
+class Metadata(typing.Generic[KT, VT]):
+    key_tuple: typing.Type[KT]
     key_columns: typing.FrozenSet[str]
-    value_tuple: typing.Type
+    value_tuple: typing.Type[VT]
     value_columns: typing.FrozenSet[str]
     count_column: str
+    timestamp_column: str
+
+
+@dataclasses.dataclass(frozen=True)
+class CacheDictRow(typing.Generic[KT, VT]):
+    key: typing.Optional[KT]
+    value: typing.Optional[VT]
+    count: typing.Optional[int]
+    timestamp: typing.Optional[datetime.datetime]
 
 
 class CacheDict(typing.Dict[KT, VT]):
@@ -100,13 +110,13 @@ class CacheDict(typing.Dict[KT, VT]):
     _finalize: weakref.finalize
 
     def __init__(
-        self,
+        self: "CacheDict[KT, VT]",
         *,
         conn: sqlite3.Connection,
         mapping: CacheDictMapping[KT, VT],
         read_only: bool = False,
         **kwargs,
-    ):
+    ) -> None:
         # Don't populate anything by passing **kwargs here.
         # We only take **kwargs to attempt to note the fact that we're called
         # in an unexpected way.
@@ -122,12 +132,13 @@ class CacheDict(typing.Dict[KT, VT]):
         self._is_internally_constructed(**kwargs)
 
         self.conn = conn
-        metadata = Metadata(
+        metadata = Metadata[KT, VT](
             mapping.KeyType,
             frozenset(i.replace('"', "") for i in mapping.key_idents),
             mapping.ValueType,
             frozenset(i.replace('"', "") for i in mapping.value_idents),
-            "COUNT(*)",
+            mapping.COUNT_COLUMN,
+            mapping.TIMESTAMP_COLUMN,
         )
         self.conn.row_factory = functools.partial(
             self._tuple_factory,
@@ -144,7 +155,7 @@ class CacheDict(typing.Dict[KT, VT]):
 
         log.info("created [%#0x] conn: [%s]", id(self), self.conn)
 
-    def create_table(self) -> None:
+    def create_table(self: "CacheDict[KT, VT]") -> None:
         if self.read_only:
             raise CacheDictReadOnlyException(
                 {
@@ -154,10 +165,9 @@ class CacheDict(typing.Dict[KT, VT]):
             )
         log.debug("create table [%#0x]")
         create_stmt = self.mapping.create_statement()
-        cursor = self.conn.execute(create_stmt)
-        cursor.fetchone()
+        self.conn.execute(create_stmt)
 
-    def clear_table(self) -> None:
+    def clear_table(self: "CacheDict[KT, VT]") -> None:
         if self.read_only:
             raise CacheDictReadOnlyException(
                 {
@@ -167,10 +177,9 @@ class CacheDict(typing.Dict[KT, VT]):
             )
         log.debug("delete table [%#0x]")
         clear_stmt = self.mapping.clear_statement()
-        cursor = self.conn.execute(clear_stmt)
-        cursor.fetchone()
+        self.conn.execute(clear_stmt)
 
-    def delete_table(self) -> None:
+    def delete_table(self: "CacheDict[KT, VT]") -> None:
         if self.read_only:
             raise CacheDictReadOnlyException(
                 {
@@ -180,27 +189,34 @@ class CacheDict(typing.Dict[KT, VT]):
             )
         log.debug("delete table [%#0x]", id(self))
         delete_stmt = self.mapping.delete_statement()
-        cursor = self.conn.execute(delete_stmt)
-        cursor.fetchone()
+        self.conn.execute(delete_stmt)
 
-    def __len__(self) -> int:
+    def __len__(self: "CacheDict[KT, VT]") -> int:
         log.debug("len [%#0x]", id(self))
         length_stmt = self.mapping.length_statement()
         cursor = self.conn.execute(length_stmt)
-        row = cursor.fetchone()
-        return row["c"]
+        res: CacheDictRow[KT, VT] = cursor.fetchone()
+        if res:
+            rlen = res.count
+            if rlen:
+                return rlen
+        return 0
 
-    def __bool__(self) -> bool:
+    def __bool__(self: "CacheDict[KT, VT]") -> bool:
         log.debug("bool [%#0x]", id(self))
         bool_stmt = self.mapping.bool_statement()
         cursor = self.conn.execute(bool_stmt)
-        row = cursor.fetchone()
-        if row:
+        res = cursor.fetchone()
+        if res:
             return True
         else:
             return False
 
-    def __delitem__(self, key: KT, /) -> None:
+    def __delitem__(
+        self: "CacheDict[KT, VT]",
+        key: KT,
+        /,
+    ) -> None:
         log.debug("delete [%#0x] key: [%s]", id(self), key)
         if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
@@ -222,10 +238,9 @@ class CacheDict(typing.Dict[KT, VT]):
             raise
         else:
             remove_stmt = self.mapping.remove_statement()
-            cursor = self.conn.execute(remove_stmt, dataclasses.astuple(key))
-            cursor.fetchone()
+            self.conn.execute(remove_stmt, dataclasses.astuple(key))
 
-    def __contains__(self, key, /) -> bool:
+    def __contains__(self: "CacheDict[KT, VT]", key: object, /) -> bool:
         log.debug("get [%#0x] key: [%s]", id(self), key)
         if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
@@ -243,7 +258,11 @@ class CacheDict(typing.Dict[KT, VT]):
         else:
             return False
 
-    def __getitem__(self, key: KT, /) -> VT:
+    def __getitem__(
+        self: "CacheDict[KT, VT]",
+        key: KT,
+        /,
+    ) -> VT:
         log.debug("get [%#0x] key: [%s]", id(self), key)
         if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
@@ -255,29 +274,37 @@ class CacheDict(typing.Dict[KT, VT]):
             )
         select_stmt = self.mapping.select_statement()
         cursor = self.conn.execute(select_stmt, dataclasses.astuple(key))
-        row = cursor.fetchone()
-        if not row:
+        res: typing.Optional[CacheDictRow[KT, VT]] = cursor.fetchone()
+        if not res:
             raise CacheDictNoSuchKeyException(
                 {"key": key, "table": self.mapping.table_ident},
             )
-        elif not row["v"]:
+        elif not res.value:
             raise Exception()
-        return row["v"]
+        return res.value
 
-    def close(self) -> None:
+    def close(self: "CacheDict[KT, VT]") -> None:
         log.info("closing [%#0x] conn: [%s]", id(self), self.conn)
         self._finalize()
 
-    def __iter__(self) -> typing.Iterator[KT]:
+    def __iter__(
+        self: "CacheDict[KT, VT]",
+    ) -> typing.Iterator[KT]:
         keys_stmt = self.mapping.keys_statement()
         cursor = self.conn.execute(keys_stmt)
-        row = cursor.fetchone()["k"]
-        while row:
-            yield row
-            row = cursor.fetchone()["k"]
+        res: typing.Optional[CacheDictRow[KT, VT]] = cursor.fetchone()
+        if res:
+            key: typing.Optional[KT] = res.key
+            while key:
+                yield key
+                res = cursor.fetchone()
+                if res:
+                    key = res.key
+                else:
+                    key = None
 
     def __setitem__(
-        self,
+        self: "CacheDict[KT, VT]",
         key: KT,
         value: VT,
         /,
@@ -326,7 +353,12 @@ class CacheDict(typing.Dict[KT, VT]):
             raise
 
     @classmethod
-    def _finalize_instance(cls, *, id: int, conn: sqlite3.Connection) -> None:
+    def _finalize_instance(
+        cls: typing.Type["CacheDict[KT, VT]"],
+        *,
+        id: int,
+        conn: sqlite3.Connection,
+    ) -> None:
         log.info("_finalize_instance [%#0x] conn: [%s]", id, conn)
         try:
             conn.close()
@@ -336,15 +368,15 @@ class CacheDict(typing.Dict[KT, VT]):
             # to stderr
             log.error("exception when closing conn: [%s]", conn, exc_info=True)
 
-    def _get_key_type_mapping(self):
+    def _get_key_type_mapping(self: "CacheDict[KT, VT]"):
         return {f.name: f.type for f in dataclasses.fields(self.mapping.KeyType)}
 
-    def _get_value_type_mapping(self):
+    def _get_value_type_mapping(self: "CacheDict[KT, VT]"):
         return {f.name: f.type for f in dataclasses.fields(self.mapping.ValueType)}
 
     @classmethod
     def _is_internally_constructed(
-        cls,
+        cls: typing.Type["CacheDict[KT, VT]"],
         *,
         _cd_internal_flag: typing.Optional[typing.Any] = None,
     ) -> None:
@@ -358,7 +390,7 @@ class CacheDict(typing.Dict[KT, VT]):
 
     @classmethod
     def raise_on_filtered_sqlite_params(
-        cls,
+        cls: typing.Type["CacheDict[KT, VT]"],
         should_raise: typing.Optional[bool] = None,
         /,
     ) -> bool:
@@ -373,7 +405,7 @@ class CacheDict(typing.Dict[KT, VT]):
 
     @classmethod
     def _cleanup_sqlite_params(
-        cls,
+        cls: typing.Type["CacheDict[KT, VT]"],
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]],
         /,
     ) -> typing.Mapping[str, typing.Any]:
@@ -403,34 +435,46 @@ class CacheDict(typing.Dict[KT, VT]):
             raise CacheDictFilteredSqliteParamsException({"filtered": filtered_params})
         return cleaned_params
 
-    @staticmethod
-    def _tuple_factory(cursor, row, /, *, metadata: Metadata):
-        columns = [x[0] for x in cursor.description]
-        keys_dict = {k: v for (k, v) in zip(columns, row) if k in metadata.key_columns}
-        values_dict = {
-            k: v for (k, v) in zip(columns, row) if k in metadata.value_columns
-        }
-        count_dict = {
-            "c": v for (k, v) in zip(columns, row) if k == metadata.count_column
-        }
+    @classmethod
+    def _tuple_factory(
+        cls: typing.Type["CacheDict[KT, VT]"],
+        cursor: sqlite3.Cursor,
+        row: typing.Tuple[typing.Any, ...],
+        /,
+        *,
+        metadata: Metadata[KT, VT],
+    ) -> CacheDictRow[KT, VT]:
+        keys_dict: typing.Dict[str, typing.Any] = {}
+        values_dict: typing.Dict[str, typing.Any] = {}
 
-        rv = {
-            "k": None,
-            "v": None,
-            "c": None,
-        }
+        keys: typing.Optional[KT] = None
+        values: typing.Optional[VT] = None
+        count: typing.Optional[int] = None
+        timestamp: typing.Optional[datetime.datetime] = None
+
+        columns = (x[0] for x in cursor.description)
+        for (k, v) in zip(columns, row):
+            if k == metadata.timestamp_column:
+                timestamp = v
+            elif k == metadata.count_column:
+                count = v
+            elif k in metadata.key_columns:
+                keys_dict[k] = v
+            elif k in metadata.value_columns:
+                values_dict[k] = v
+
         if keys_dict:
-            rv["k"] = metadata.key_tuple(**keys_dict)
+            keys = metadata.key_tuple(**keys_dict)  # type: ignore
         if values_dict:
-            rv["v"] = metadata.value_tuple(**values_dict)
-        if count_dict:
-            rv["c"] = count_dict["c"]
+            values = metadata.value_tuple(**values_dict)  # type: ignore
+
+        rv = CacheDictRow[KT, VT](keys, values, count, timestamp)
 
         return rv
 
     @classmethod
     def _open_connection(
-        cls,
+        cls: typing.Type["CacheDict[KT, VT]"],
         **kwargs,
     ) -> sqlite3.Connection:
         conn = sqlite3.connect(**kwargs)

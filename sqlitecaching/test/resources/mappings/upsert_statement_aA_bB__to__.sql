@@ -13,15 +13,5 @@ INSERT INTO "aa_bb"
     -- all values
     ?,
     ?
-) ON CONFLICT (
-    -- key columns
-    "a", -- key
-    "b" -- key
-) DO UPDATE SET (
-    -- timestamp
-    __timestamp
-) = (
-    -- timestamp
-    excluded.__timestamp
-)
+) ON CONFLICT DO NOTHING
 ;

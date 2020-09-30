@@ -126,6 +126,9 @@ VT = typing.TypeVar("VT")
 
 
 class CacheDictMapping(typing.Generic[KT, VT]):
+    COUNT_COLUMN: typing.ClassVar[str] = "COUNT(*)"
+    TIMESTAMP_COLUMN: typing.ClassVar[str] = "__timestamp"
+
     table_ident: ValidIdent
     key_idents: typing.FrozenSet[ValidIdent]
     value_idents: typing.FrozenSet[ValidIdent]
@@ -296,7 +299,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "CREATE TABLE IF NOT EXISTS {table_identifier}\n"
         "(\n"
         "    -- timestamp (for ordering)\n"
-        "    __timestamp TIMESTAMP,\n"
+        "    {timestamp_column} TIMESTAMP,\n"
         "    -- keys\n"
         "    {key_column_definitions}\n"
         "    -- values\n"
@@ -347,6 +350,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
 
         unstripped_create_statement = self._CREATE_FMT.format(
             table_identifier=self.table_ident,
+            timestamp_column=self.TIMESTAMP_COLUMN,
             key_column_definitions=key_column_definitions,
             value_column_definitions=value_column_definitions,
             primary_key_definition=primary_key_definition,
@@ -415,7 +419,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "INSERT INTO {table_identifier}\n"
         "(\n"
         "    -- timestamp\n"
-        "    __timestamp,\n"
+        "    {timestamp_column},\n"
         "    -- all columns\n"
         "    {all_columns}\n"
         ") VALUES (\n"
@@ -431,28 +435,15 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "    -- key columns\n"
         "    {key_columns}\n"
         ") DO UPDATE SET (\n"
-        "    -- timestamp\n"
-        "    __timestamp,\n"
         "    -- value columns\n"
         "    {value_columns}\n"
         ") = (\n"
-        "    -- timestamp\n"
-        "    excluded.__timestamp,\n"
         "    -- value values\n"
         "    {value_values}\n"
         ")"
     )
-    _UPSERT_WITHOUT_VALUES_STMT_FMT: typing.ClassVar[str] = (
-        "(\n"
-        "    -- key columns\n"
-        "    {key_columns}\n"
-        ") DO UPDATE SET (\n"
-        "    -- timestamp\n"
-        "    __timestamp\n"
-        ") = (\n"
-        "    -- timestamp\n"
-        "    excluded.__timestamp\n"
-        ")"
+    _UPSERT_WITHOUT_VALUES_STMT: typing.ClassVar[str] = (
+        "DO NOTHING"
     )
     # fmt: on
 
@@ -487,9 +478,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         else:
             all_columns += " -- key\n    "
             all_columns += "-- no values defined"
-            upsert_stmt = self._UPSERT_WITHOUT_VALUES_STMT_FMT.format(
-                key_columns=key_columns,
-            )
+            upsert_stmt = self._UPSERT_WITHOUT_VALUES_STMT
 
         all_values = ",\n    ".join(
             ["?" for _ in range(0, len(key_column_names) + len(value_column_names))],
@@ -498,6 +487,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             table_identifier=self.table_ident,
             all_columns=all_columns,
             all_values=all_values,
+            timestamp_column=self.TIMESTAMP_COLUMN,
             upsert_stmt=upsert_stmt,
         )
 
@@ -522,7 +512,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         ") = (\n"
         "    -- key values\n"
         "    {key_values}\n"
-        ") ORDER BY __timestamp {order};\n"
+        ") ORDER BY {timestamp_column} {order};\n"
     )
     # fmt: on
 
@@ -541,7 +531,10 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             value_columns = ", -- value\n    ".join(value_column_names)
             value_columns += " -- value"
         else:
-            value_columns = "NULL -- no value columns so just NULL"
+            value_columns = (
+                f"{self.TIMESTAMP_COLUMN} -- no value columns so just "
+                f"{self.TIMESTAMP_COLUMN}"
+            )
 
         key_column_names = sorted(self.key_idents)
         key_columns = ", -- key\n    ".join(key_column_names)
@@ -554,6 +547,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             value_columns=value_columns,
             key_columns=key_columns,
             key_values=key_values,
+            timestamp_column=self.TIMESTAMP_COLUMN,
             order=order,
         )
 
@@ -613,7 +607,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
     # fmt: off
     _LENGTH_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching table length\n"
-        "SELECT COUNT(*) FROM {table_identifier};\n"
+        "SELECT {count_column} FROM {table_identifier};\n"
     )
     # fmt: on
 
@@ -622,6 +616,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             return self._length_statement
 
         unstripped_length_statement = self._LENGTH_FMT.format(
+            count_column=self.COUNT_COLUMN,
             table_identifier=self.table_ident,
         )
 
@@ -640,7 +635,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "SELECT\n"
         "    {key_columns}\n"
         "FROM {table_identifier}\n"
-        "ORDER BY __timestamp {order};\n"
+        "ORDER BY {timestamp_column} {order};\n"
     )
     # fmt: on
 
@@ -661,6 +656,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         unstripped_keys_statement = self._KEYS_FMT.format(
             key_columns=key_columns,
             table_identifier=self.table_ident,
+            timestamp_column=self.TIMESTAMP_COLUMN,
             order=order,
         )
 
@@ -681,9 +677,10 @@ class CacheDictMapping(typing.Generic[KT, VT]):
     # fmt: off
     _BOOL_FMT: typing.ClassVar[str] = (
         "-- sqlitecaching table bool\n"
-        "-- either returns nothing or one NULL to indicate that some value is stored\n"
+        "-- either returns nothing or one {timestamp_column} to indicate that some\n"
+        "-- value is stored\n"
         "SELECT\n"
-        "    NULL\n"
+        "    {timestamp_column}\n"
         "FROM {table_identifier}\n"
         "LIMIT 1;\n"
     )
@@ -694,7 +691,10 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             return self._bool_statement
 
         bool_statement = SqlStatement(
-            self._BOOL_FMT.format(table_identifier=self.table_ident),
+            self._BOOL_FMT.format(
+                timestamp_column=self.TIMESTAMP_COLUMN,
+                table_identifier=self.table_ident,
+            ),
         )
         self._bool_statement = bool_statement
         return bool_statement
@@ -706,7 +706,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "    -- all columns\n"
         "    {all_columns}\n"
         "FROM {table_identifier}\n"
-        "ORDER BY __timestamp {order};\n"
+        "ORDER BY {timestamp_column} {order};\n"
     )
     # fmt: on
 
@@ -734,6 +734,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         unstripped_items_statement = self._ITEMS_FMT.format(
             all_columns=all_columns,
             table_identifier=self.table_ident,
+            timestamp_column=self.TIMESTAMP_COLUMN,
             order=order,
         )
 
@@ -757,7 +758,7 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         "SELECT\n"
         "    {value_columns}\n"
         "FROM {table_identifier}\n"
-        "ORDER BY __timestamp {order};\n"
+        "ORDER BY {timestamp_column} {order};\n"
     )
     # fmt: on
 
@@ -776,11 +777,15 @@ class CacheDictMapping(typing.Generic[KT, VT]):
             value_columns = ", -- value\n    ".join(value_column_names)
             value_columns += " -- value"
         else:
-            value_columns = "NULL -- NULL value to permit querying"
+            value_columns = (
+                f"{self.TIMESTAMP_COLUMN} -- {self.TIMESTAMP_COLUMN} value to "
+                "permit querying"
+            )
 
         unstripped_values_statement = self._VALUES_FMT.format(
             value_columns=value_columns,
             table_identifier=self.table_ident,
+            timestamp_column=self.TIMESTAMP_COLUMN,
             order=order,
         )
 

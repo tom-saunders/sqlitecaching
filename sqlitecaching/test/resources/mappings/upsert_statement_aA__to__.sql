@@ -11,14 +11,5 @@ INSERT INTO "aa"
     ?,
     -- all values
     ?
-) ON CONFLICT (
-    -- key columns
-    "a" -- key
-) DO UPDATE SET (
-    -- timestamp
-    __timestamp
-) = (
-    -- timestamp
-    excluded.__timestamp
-)
+) ON CONFLICT DO NOTHING
 ;

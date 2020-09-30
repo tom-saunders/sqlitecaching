@@ -1,6 +1,7 @@
 -- sqlitecaching table bool
--- either returns nothing or one NULL to indicate that some value is stored
+-- either returns nothing or one __timestamp to indicate that some
+-- value is stored
 SELECT
-    NULL
+    __timestamp
 FROM "aa"
 LIMIT 1;

@@ -1,6 +1,6 @@
 -- sqlitecaching retrieve from table
 SELECT
-    NULL -- no value columns so just NULL
+    __timestamp -- no value columns so just __timestamp
 FROM "aa_bb"
 WHERE (
     -- key columns
