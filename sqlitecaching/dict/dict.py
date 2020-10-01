@@ -7,7 +7,7 @@ import sqlite3
 import typing
 import weakref
 
-from sqlitecaching.dict.mapping import CacheDictMapping
+from sqlitecaching.dict.mapping import CacheDictMapping, SqlStatement
 from sqlitecaching.exceptions import SqliteCachingException
 
 log = logging.getLogger(__name__)
@@ -59,6 +59,18 @@ except NameError:
         params=frozenset(["value", "value_type", "VT"]),
         additional_excepts=frozenset([TypeError]),
     )
+    CacheDictConnectionClosedException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictConnectionClosedException",
+        cause_id=5,
+        fmt="operation [{op}] attempted after database connection closed",
+        params=frozenset(["op"]),
+    )
+    CacheDictMethodUnsupportedException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictMethodUnsupportedException",
+        cause_id=6,
+        fmt="method [{method}] is unsupported by CacheDict",
+        params=frozenset(["method"]),
+    )
 
 
 @enum.unique
@@ -67,6 +79,7 @@ class ToCreate(enum.Enum):
     DATABASE = enum.auto()
 
 
+T = typing.TypeVar("T")
 KT = typing.TypeVar("KT")
 VT = typing.TypeVar("VT")
 
@@ -92,6 +105,7 @@ class CacheDictRow(typing.Generic[KT, VT]):
 class CacheDict(typing.Dict[KT, VT]):
     _internally_constructed: typing.ClassVar[typing.Any] = object()
     _raise_on_filtered_sqlite_params: typing.ClassVar[bool] = False
+    __MARKER = object()
 
     ANON_MEM_PATH: typing.ClassVar[str] = ":memory:"
     ANON_DISK_PATH: typing.ClassVar[str] = ""
@@ -99,16 +113,16 @@ class CacheDict(typing.Dict[KT, VT]):
     PASSTHROUGH_PARAMS: typing.ClassVar[typing.List[str]] = [
         "timeout",
         "detect_types",
-        "isolation_level",
         "factory",
         "cached_statements",
     ]
 
-    conn: sqlite3.Connection
+    conn: typing.Optional[sqlite3.Connection] = None
     mapping: CacheDictMapping
     filepath: str
     read_only: bool
     _finalize: weakref.finalize
+    initialized: bool = False
 
     def __init__(
         self: "CacheDict[KT, VT]",
@@ -157,8 +171,10 @@ class CacheDict(typing.Dict[KT, VT]):
             self.create_table()
 
         log.info("created [%#0x] conn: [%s]", id(self), self.conn)
+        self.initialized = True
 
     def create_table(self: "CacheDict[KT, VT]") -> None:
+        log.debug("create table [%r]", self)
         if self.read_only:
             raise CacheDictReadOnlyException(
                 {
@@ -166,11 +182,11 @@ class CacheDict(typing.Dict[KT, VT]):
                     "table": self.mapping.table_ident,
                 },
             )
-        log.debug("create table [%#0x]")
         create_stmt = self.mapping.create_statement()
-        self.conn.execute(create_stmt)
+        self._execute(create_stmt, op="create")
 
-    def clear_table(self: "CacheDict[KT, VT]") -> None:
+    def clear(self: "CacheDict[KT, VT]") -> None:
+        log.debug("clear [%r]", self)
         if self.read_only:
             raise CacheDictReadOnlyException(
                 {
@@ -178,11 +194,11 @@ class CacheDict(typing.Dict[KT, VT]):
                     "table": self.mapping.table_ident,
                 },
             )
-        log.debug("delete table [%#0x]")
         clear_stmt = self.mapping.clear_statement()
-        self.conn.execute(clear_stmt)
+        self._execute(clear_stmt, op="clear")
 
     def delete_table(self: "CacheDict[KT, VT]") -> None:
+        log.debug("delete table [%r]", self)
         if self.read_only:
             raise CacheDictReadOnlyException(
                 {
@@ -190,13 +206,151 @@ class CacheDict(typing.Dict[KT, VT]):
                     "table": self.mapping.table_ident,
                 },
             )
-        log.debug("delete table [%#0x]", id(self))
         delete_stmt = self.mapping.delete_statement()
-        self.conn.execute(delete_stmt)
+        self._execute(delete_stmt, op="delete")
 
     def close(self: "CacheDict[KT, VT]") -> None:
-        log.info("closing [%#0x] conn: [%s]", id(self), self.conn)
+        log.warning("closing [%r]", self)
+        # _finalize() closes the connection
         self._finalize()
+        self.conn = None  # type: ignore
+
+    def interrupt(self: "CacheDict[KT, VT]") -> None:
+        log.debug("interrupt [%r]", self)
+        if not self.conn:
+            log.warning("interrupt with None connection [%r]", self)
+            raise CacheDictConnectionClosedException({"op": "interrupt"})
+
+        try:
+            return self.conn.interrupt()
+        except Exception:
+            log.debug("exception from interrupt", exc_info=True)
+            raise
+
+    def rollback(self: "CacheDict[KT, VT]") -> None:
+        log.debug("rollback [%r]", self)
+        if not self.conn:
+            log.warning("rollback with None connection [%r]", self)
+            raise CacheDictConnectionClosedException({"op": "rollback"})
+
+        try:
+            return self.conn.rollback()
+        except Exception:
+            log.debug("exception from rollback", exc_info=True)
+            raise
+
+    def commit(self: "CacheDict[KT, VT]") -> None:
+        log.debug("committing [%r]", self)
+        if not self.conn:
+            log.warning("commit with None connection [%r]", self)
+            raise CacheDictConnectionClosedException({"op": "commit"})
+
+        try:
+            return self.conn.commit()
+        except Exception:
+            log.debug("exception from commit", exc_info=True)
+            raise
+
+    def copy(self: "CacheDict[KT, VT]") -> typing.NoReturn:
+        raise CacheDictMethodUnsupportedException({"method": "copy()"})
+
+    @typing.overload
+    def get(self: "CacheDict[KT, VT]", key: KT) -> typing.Optional[VT]:
+        ...
+
+    @typing.overload
+    def get(
+        self: "CacheDict[KT, VT]",
+        key: KT,
+        default: T,
+    ) -> typing.Union[VT, T]:
+        ...
+
+    def get(
+        self: "CacheDict[KT, VT]",
+        key: KT,
+        default: typing.Optional[T] = None,
+    ) -> typing.Union[typing.Optional[VT], T]:
+        raise Exception()
+
+    def setdefault(
+        self: "CacheDict[KT, VT]",
+        key: KT,
+        value: typing.Optional[VT] = None,
+    ) -> VT:
+        raise Exception()
+
+    @typing.overload
+    def pop(self: "CacheDict[KT, VT]", key: KT) -> VT:
+        ...
+
+    @typing.overload
+    def pop(
+        self: "CacheDict[KT, VT]",
+        key: KT,
+        default: T = ...,
+    ) -> typing.Union[VT, T]:
+        ...
+
+    def pop(
+        self: "CacheDict[KT, VT]",
+        key: KT,
+        default: T = __MARKER,  # type: ignore
+    ) -> typing.Union[VT, T]:
+        raise Exception()
+
+    def popitem(self: "CacheDict[KT, VT]") -> typing.Tuple[KT, VT]:
+        raise Exception()
+
+    @typing.overload
+    def update(
+        self: "CacheDict[KT, VT]",
+        mapping: typing.Mapping[KT, VT],
+        /,
+        **kwargs: VT,
+    ) -> None:
+        ...
+
+    @typing.overload
+    def update(
+        self: "CacheDict[KT, VT]",
+        mapping: typing.Iterable[typing.Tuple[KT, VT]],
+        /,
+        **kwargs: VT,
+    ) -> None:
+        ...
+
+    @typing.overload
+    def update(self: "CacheDict[KT, VT]", /, **kwargs: VT) -> None:
+        ...
+
+    def update(
+        self: "CacheDict[KT, VT]",
+        mapping: typing.Union[
+            typing.Mapping[KT, VT],
+            typing.Iterable[typing.Tuple[KT, VT]],
+        ] = (),
+        /,
+        **kwargs: VT,
+    ) -> None:
+        raise Exception()
+
+    def keys(self: "CacheDict[KT, VT]") -> typing.KeysView[KT]:
+        raise Exception()
+
+    def values(self: "CacheDict[KT, VT]") -> typing.ValuesView[VT]:
+        raise Exception()
+
+    def items(self: "CacheDict[KT, VT]") -> typing.ItemsView[KT, VT]:
+        raise Exception()
+
+    @property
+    def in_transaction(self: "CacheDict[KT, VT]"):
+        log.debug("get in_transaction [%r]", self)
+        if not self.conn:
+            log.warning("get in_transaction with None connection [%r]", self)
+            raise CacheDictConnectionClosedException({"op": "in_transaction"})
+        return self.conn.in_transaction
 
     @classmethod
     def raise_on_filtered_sqlite_params(
@@ -318,6 +472,27 @@ class CacheDict(typing.Dict[KT, VT]):
 
         return cache_dict
 
+    def _execute(
+        self: "CacheDict[KT, VT]",
+        statement: SqlStatement,
+        params: typing.Optional[typing.Iterable[typing.Any]] = None,
+        /,
+        *,
+        op: str,
+    ) -> sqlite3.Cursor:
+        log.debug("_execute [%s] for [%r]", statement, self)
+        if not self.conn:
+            log.warning("_execute() with None connection [%r]", self)
+            raise CacheDictConnectionClosedException({"op": op})
+        try:
+            if params:
+                return self.conn.execute(statement, params)
+            else:
+                return self.conn.execute(statement)
+        except Exception:
+            log.debug("exception from execute", exc_info=True)
+            raise
+
     @classmethod
     def _create_from_conn(
         cls: typing.Type["CacheDict[KT, VT]"],
@@ -339,10 +514,10 @@ class CacheDict(typing.Dict[KT, VT]):
         return cache_dict
 
     def __len__(self: "CacheDict[KT, VT]") -> int:
-        log.debug("len [%#0x]", id(self))
+        log.debug("len [%r]", self)
         length_stmt = self.mapping.length_statement()
-        cursor = self.conn.execute(length_stmt)
-        res: CacheDictRow[KT, VT] = cursor.fetchone()
+        cursor = self._execute(length_stmt, op="length")
+        res: typing.Optional[CacheDictRow[KT, VT]] = cursor.fetchone()
         if res:
             rlen = res.count
             if rlen:
@@ -350,21 +525,27 @@ class CacheDict(typing.Dict[KT, VT]):
         return 0
 
     def __bool__(self: "CacheDict[KT, VT]") -> bool:
-        log.debug("bool [%#0x]", id(self))
-        bool_stmt = self.mapping.bool_statement()
-        cursor = self.conn.execute(bool_stmt)
-        res = cursor.fetchone()
-        if res:
-            return True
-        else:
+        log.debug("bool [%s]", repr(self))
+        if not self.initialized:
+            log.warning("preinitial, return false")
             return False
+        bool_stmt = self.mapping.bool_statement()
+        cursor = self._execute(bool_stmt, op="bool")
+        res: typing.Optional[CacheDictRow[KT, VT]] = cursor.fetchone()
+        if res:
+            if res.timestamp:
+                return True
+        return False
 
-    def __delitem__(
-        self: "CacheDict[KT, VT]",
-        key: KT,
-        /,
-    ) -> None:
+    def __delitem__(self: "CacheDict[KT, VT]", key: KT, /) -> None:
         log.debug("delete [%#0x] key: [%s]", id(self), key)
+        if self.read_only:
+            raise CacheDictReadOnlyException(
+                {
+                    "op": "delitem",
+                    "table": self.mapping.table_ident,
+                },
+            )
         if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
                 {
@@ -385,7 +566,7 @@ class CacheDict(typing.Dict[KT, VT]):
             raise
         else:
             remove_stmt = self.mapping.remove_statement()
-            self.conn.execute(remove_stmt, dataclasses.astuple(key))
+            self._execute(remove_stmt, dataclasses.astuple(key), op="remove")
 
     def __contains__(self: "CacheDict[KT, VT]", key: object, /) -> bool:
         log.debug("get [%#0x] key: [%s]", id(self), key)
@@ -398,18 +579,15 @@ class CacheDict(typing.Dict[KT, VT]):
                 },
             )
         select_stmt = self.mapping.select_statement()
-        cursor = self.conn.execute(select_stmt, dataclasses.astuple(key))
-        row = cursor.fetchone()["v"]
-        if row:
-            return True
-        else:
-            return False
+        cursor = self._execute(select_stmt, dataclasses.astuple(key), op="contains")
+        res: typing.Optional[CacheDictRow[KT, VT]] = cursor.fetchone()
+        if res:
+            # if there are no value columns then the timestamp is returned
+            if res.value or res.timestamp:
+                return True
+        return False
 
-    def __getitem__(
-        self: "CacheDict[KT, VT]",
-        key: KT,
-        /,
-    ) -> VT:
+    def __getitem__(self: "CacheDict[KT, VT]", key: KT, /) -> VT:
         log.debug("get [%#0x] key: [%s]", id(self), key)
         if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
@@ -420,7 +598,7 @@ class CacheDict(typing.Dict[KT, VT]):
                 },
             )
         select_stmt = self.mapping.select_statement()
-        cursor = self.conn.execute(select_stmt, dataclasses.astuple(key))
+        cursor = self._execute(select_stmt, dataclasses.astuple(key), op="select")
         res: typing.Optional[CacheDictRow[KT, VT]] = cursor.fetchone()
         if not res:
             raise CacheDictNoSuchKeyException(
@@ -430,11 +608,9 @@ class CacheDict(typing.Dict[KT, VT]):
             raise Exception()
         return res.value
 
-    def __iter__(
-        self: "CacheDict[KT, VT]",
-    ) -> typing.Iterator[KT]:
+    def __iter__(self: "CacheDict[KT, VT]") -> typing.Iterator[KT]:
         keys_stmt = self.mapping.keys_statement()
-        cursor = self.conn.execute(keys_stmt)
+        cursor = self._execute(keys_stmt, op="keys")
         res: typing.Optional[CacheDictRow[KT, VT]] = cursor.fetchone()
         if res:
             key: typing.Optional[KT] = res.key
@@ -446,13 +622,15 @@ class CacheDict(typing.Dict[KT, VT]):
                 else:
                     key = None
 
-    def __setitem__(
-        self: "CacheDict[KT, VT]",
-        key: KT,
-        value: VT,
-        /,
-    ) -> None:
+    def __setitem__(self: "CacheDict[KT, VT]", key: KT, value: VT, /) -> None:
         log.debug("set [%#0x] key: [%s] value: [%s]", id(self), key, value)
+        if self.read_only:
+            raise CacheDictReadOnlyException(
+                {
+                    "op": "setitem",
+                    "table": self.mapping.table_ident,
+                },
+            )
         if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
                 {
@@ -481,19 +659,33 @@ class CacheDict(typing.Dict[KT, VT]):
                 )
                 raise
         upsert_stmt = self.mapping.upsert_statement()
-        cursor = self.conn.execute(
-            upsert_stmt,
-            (datetime.datetime.now(),)
-            + dataclasses.astuple(key)
-            + dataclasses.astuple(value),
-        )
         try:
-            cursor.fetchone()
+            self._execute(
+                upsert_stmt,
+                (datetime.datetime.now(),)
+                + dataclasses.astuple(key)
+                + dataclasses.astuple(value),
+                op="upsert",
+            )
         except Exception:
-            # TODO ???
+            # TODO can this actually happen?
             # raise ???
             log.warning("exception from upsert", exc_info=True)
             raise
+
+    def __reversed__(self: "CacheDict[KT, VT]") -> typing.Iterator[KT]:
+        keys_stmt = self.mapping.keys_statement(asc=False)
+        cursor = self._execute(keys_stmt, op="reversed")
+        res: typing.Optional[CacheDictRow[KT, VT]] = cursor.fetchone()
+        if res:
+            key: typing.Optional[KT] = res.key
+            while key:
+                yield key
+                res = cursor.fetchone()
+                if res:
+                    key = res.key
+                else:
+                    key = None
 
     @classmethod
     def _finalize_instance(
@@ -599,6 +791,8 @@ class CacheDict(typing.Dict[KT, VT]):
             keys = metadata.key_tuple(**keys_dict)  # type: ignore
         if values_dict:
             values = metadata.value_tuple(**values_dict)  # type: ignore
+        elif len(metadata.value_columns) == 0 and timestamp:
+            values = metadata.value_tuple()
 
         rv = CacheDictRow[KT, VT](keys, values, count, timestamp)
 

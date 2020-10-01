@@ -9,8 +9,9 @@ from dataclasses import dataclass
 
 import parameterized
 
-from sqlitecaching.dict.dict import CacheDict, ToCreate
+from sqlitecaching.dict.dict import CacheDict, CacheDictNoSuchKeyException, ToCreate
 from sqlitecaching.dict.mapping import CacheDictMapping
+from sqlitecaching.exceptions import SqliteCachingException
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
 
 log = logging.getLogger(__name__)
@@ -69,21 +70,26 @@ class CD:
     d: str
 
 
-empty_aA__bB = CacheDictMapping(  # noqa: N816
+@dataclass(frozen=True)
+class Empty:
+    pass
+
+
+empty = CacheDictMapping(  # noqa: N816
     table="empty",
     key_type=A,
     key_types=A("A"),
     value_type=B,
     value_types=B("B"),
 )
-minimal_aA__bB = CacheDictMapping(  # noqa: N816
+minimal = CacheDictMapping(  # noqa: N816
     table="minimal",
     key_type=A,
     key_types=A("A"),
     value_type=B,
     value_types=B("B"),
 )
-minimal_two_aA_bB__cC_dD = CacheDictMapping(  # noqa: N816
+minimal_two = CacheDictMapping(  # noqa: N816
     table="minimal_two",
     key_type=AB,
     key_types=AB("A", "B"),
@@ -91,11 +97,19 @@ minimal_two_aA_bB__cC_dD = CacheDictMapping(  # noqa: N816
     value_types=CD("C", "D"),
 )
 
-NOT_PRESENT = object()
+minimal_three = CacheDictMapping(  # noqa: N816
+    table="minimal_three",
+    key_type=A,
+    key_types=A("A"),
+    value_type=Empty,
+    value_types=Empty(),
+)
+
+NOT_PRESENT = "NOT_PRESENT_MARKER"
 
 
 @test_level(TestLevel.PRE_COMMIT)
-class TestCacheDictCreation(SqliteCachingTestBase):
+class TestCacheDict(SqliteCachingTestBase):
     tmp_dir: str
 
     def setUp(self):
@@ -112,12 +126,12 @@ class TestCacheDictCreation(SqliteCachingTestBase):
     success_params = [
         Def(
             name="empty",
-            mapping=empty_aA__bB,
+            mapping=empty,
             extra=Extra(preexisting={}, actions=[]),
         ),
         Def(
             name="minimal",
-            mapping=minimal_aA__bB,
+            mapping=minimal,
             extra=Extra(
                 preexisting={
                     A("a"): B("b"),
@@ -129,12 +143,24 @@ class TestCacheDictCreation(SqliteCachingTestBase):
         ),
         Def(
             name="minimal",
-            mapping=minimal_two_aA_bB__cC_dD,
+            mapping=minimal_two,
             extra=Extra(
                 preexisting={
                     AB("a", "b"): CD("c", "d"),
                     AB("b", "a"): CD("d", "c"),
                     AB("a", "a"): NOT_PRESENT,
+                },
+                actions=[],
+            ),
+        ),
+        Def(
+            name="minimal",
+            mapping=minimal_three,
+            extra=Extra(
+                preexisting={
+                    A("a"): Empty(),
+                    A("b"): Empty(),
+                    A("c"): NOT_PRESENT,
                 },
                 actions=[],
             ),
@@ -163,7 +189,12 @@ class TestCacheDictCreation(SqliteCachingTestBase):
         self.assertNotEqual(c, None)
 
     @parameterized.parameterized.expand(success_params)
-    def test_open_readonly(self, name: str, mapping: CacheDictMapping, extra: Extra):
+    def test_readonly_preexist(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
         c = CacheDict.open_readonly(
             path=f"{self.tmp_dir}/{name}.readonly.sqlite",
             mapping=mapping,
@@ -173,18 +204,212 @@ class TestCacheDictCreation(SqliteCachingTestBase):
             preexist = extra.preexisting
         else:
             preexist = {}
+
         for (key, expected) in preexist.items():
-            if expected is not NOT_PRESENT:
-                actual = c[key]
-                self.assertEqual(actual, expected)
-            else:
-                with self.assertRaises(KeyError) as raised_context:
-                    _ = c[key]
-                _ = raised_context.exception
+            with self.subTest(key=key, expected=expected):
+                if expected is not NOT_PRESENT:
+                    actual_value = c[key]
+                    self.assertEqual(actual_value, expected)
 
-        _ = len(c)
+                    actual_present = key in c
+                    self.assertTrue(actual_present)
 
-        self.assertNotEqual(c, None)
+                    actual_missing = key not in c
+                    self.assertFalse(actual_missing)
+                else:
+                    actual_present = key in c
+                    self.assertFalse(actual_present)
+
+                    actual_missing = key not in c
+                    self.assertTrue(actual_missing)
+
+                    with self.assertRaises(KeyError) as raised_context:
+                        _ = c[key]
+                    actual: typing.Any = raised_context.exception
+                    self.assertIsInstance(actual, SqliteCachingException)
+                    self.assertEqual(
+                        actual.category.id,
+                        CacheDictNoSuchKeyException.category_id,
+                        actual.msg,
+                    )
+                    self.assertEqual(
+                        actual.cause.id,
+                        CacheDictNoSuchKeyException.id,
+                        actual.msg,
+                    )
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_preexist_get(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        if extra.preexisting:
+            preexist = extra.preexisting
+        else:
+            preexist = {}
+
+        missing_value = "MISSING_VALUE_MARKER"
+
+        for (key, expected) in preexist.items():
+            with self.subTest(key=key, expected=expected):
+                if expected is not NOT_PRESENT:
+                    actual_value = c.get(key, missing_value)
+                    self.assertIsNot(actual_value, missing_value)
+                    self.assertEqual(actual_value, expected)
+                else:
+                    actual_value = c.get(key, missing_value)
+                    self.assertIs(actual_value, missing_value)
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_preexist_get_nodefault(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        if extra.preexisting:
+            preexist = extra.preexisting
+        else:
+            preexist = {}
+
+        for (key, expected) in preexist.items():
+            with self.subTest(key=key, expected=expected):
+                if expected is not NOT_PRESENT:
+                    actual_value = c.get(key)
+                    self.assertEqual(actual_value, expected)
+                else:
+                    with self.assertRaises(KeyError) as raised_context:
+                        _ = c.get(key)
+                    actual: typing.Any = raised_context.exception
+                    self.assertIsInstance(actual, SqliteCachingException)
+                    self.assertEqual(
+                        actual.category.id,
+                        CacheDictNoSuchKeyException.category_id,
+                        actual.msg,
+                    )
+                    self.assertEqual(
+                        actual.cause.id,
+                        CacheDictNoSuchKeyException.id,
+                        actual.msg,
+                    )
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_preexist_bool(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        actual = bool(c)
+        if extra.preexisting:
+            self.assertTrue(actual)
+        else:
+            self.assertFalse(actual)
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_preexist_complete(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        if extra.preexisting:
+            preexist = extra.preexisting
+        else:
+            preexist = {}
+
+        item_count = 0
+        for (actual_key, actual_value) in c.items():
+            with self.subTest(actual_key=actual_key, actual_value=actual_value):
+                in_preexist = (actual_key, actual_value) in preexist.items()
+                self.assertTrue(in_preexist, "Missing key/value in preexisting items")
+                item_count += 1
+
+        preexist_present_count = sum(
+            1 for x in preexist.values() if x is not NOT_PRESENT
+        )
+        self.assertEqual(item_count, preexist_present_count)
+        self.assertEqual(len(c), preexist_present_count)
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_in(self, name: str, mapping: CacheDictMapping, extra: Extra):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+
+        key_count = 0
+        for _ in c:
+            key_count += 1
+
+        self.assertEqual(key_count, len(c))
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_keys(self, name: str, mapping: CacheDictMapping, extra: Extra):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+
+        key_count = 0
+        for _ in c.keys():
+            key_count += 1
+
+        self.assertEqual(key_count, len(c))
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_values(self, name: str, mapping: CacheDictMapping, extra: Extra):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+
+        value_count = 0
+        for _ in c.values():
+            value_count += 1
+
+        self.assertEqual(value_count, len(c))
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_iter(self, name: str, mapping: CacheDictMapping, extra: Extra):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        key_count = 0
+        for _ in iter(c):
+            key_count += 1
+
+        self.assertEqual(key_count, len(c))
+
+        # _ = list(c)
+        # _ = bool(c)
 
     @parameterized.parameterized.expand(success_params)
     def test_open_readwrite(self, name: str, mapping: CacheDictMapping, extra: Extra):
@@ -198,13 +423,14 @@ class TestCacheDictCreation(SqliteCachingTestBase):
         else:
             preexist = {}
         for (key, expected) in preexist.items():
-            if expected is not NOT_PRESENT:
-                actual = c[key]
-                self.assertEqual(actual, expected)
-            else:
-                with self.assertRaises(KeyError) as raised_context:
-                    _ = c[key]
-                _ = raised_context.exception
+            with self.subTest(key=key, expected=expected):
+                if expected is not NOT_PRESENT:
+                    actual = c[key]
+                    self.assertEqual(actual, expected)
+                else:
+                    with self.assertRaises(KeyError) as raised_context:
+                        _ = c[key]
+                    _ = raised_context.exception
 
         self.assertNotEqual(c, None)
 
