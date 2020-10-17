@@ -5,6 +5,7 @@ import shutil
 import sqlite3
 import tempfile
 import typing
+import unittest
 from dataclasses import dataclass
 
 import parameterized
@@ -290,20 +291,8 @@ class TestCacheDict(SqliteCachingTestBase):
                     actual_value = c.get(key)
                     self.assertEqual(actual_value, expected)
                 else:
-                    with self.assertRaises(KeyError) as raised_context:
-                        _ = c.get(key)
-                    actual: typing.Any = raised_context.exception
-                    self.assertIsInstance(actual, SqliteCachingException)
-                    self.assertEqual(
-                        actual.category.id,
-                        CacheDictNoSuchKeyException.category_id,
-                        actual.msg,
-                    )
-                    self.assertEqual(
-                        actual.cause.id,
-                        CacheDictNoSuchKeyException.id,
-                        actual.msg,
-                    )
+                    missing_value = c.get(key)
+                    self.assertIsNone(missing_value)
 
     @parameterized.parameterized.expand(success_params)
     def test_readonly_preexist_bool(

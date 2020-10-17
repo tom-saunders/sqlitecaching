@@ -1,3 +1,4 @@
+import dataclasses
 import itertools
 import logging
 import typing
@@ -94,11 +95,15 @@ class InvIn(typing.Generic[KT, VT]):
     value_types: typing.Optional[VT] = None
 
 
-class Def(typing.NamedTuple, typing.Generic[KT, VT]):
+@dataclass
+class Def(typing.Generic[KT, VT]):
     name: str
     mapping: typing.Union[In[KT, VT], InvIn[KT, VT]]
     expected: typing.Any
     meta: typing.Optional[typing.Any] = None
+
+    def __iter__(self):
+        return (getattr(self, field.name) for field in dataclasses.fields(self))
 
 
 class FailRes(typing.NamedTuple):

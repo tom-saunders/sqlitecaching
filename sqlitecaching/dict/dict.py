@@ -102,6 +102,18 @@ class CacheDictRow(typing.Generic[KT, VT]):
     timestamp: typing.Optional[datetime.datetime]
 
 
+class CacheDictKeysView(typing.KeysView[KT]):
+    pass
+
+
+class CacheDictValuesView(typing.ValuesView[KT]):
+    pass
+
+
+class CacheDictItemsView(typing.ItemsView[KT, VT]):
+    pass
+
+
 class CacheDict(typing.Dict[KT, VT]):
     _internally_constructed: typing.ClassVar[typing.Any] = object()
     _raise_on_filtered_sqlite_params: typing.ClassVar[bool] = False
@@ -271,7 +283,10 @@ class CacheDict(typing.Dict[KT, VT]):
         key: KT,
         default: typing.Optional[T] = None,
     ) -> typing.Union[typing.Optional[VT], T]:
-        raise Exception()
+        try:
+            return self.__getitem__(key)
+        except KeyError:
+            return default
 
     def setdefault(
         self: "CacheDict[KT, VT]",
@@ -336,13 +351,13 @@ class CacheDict(typing.Dict[KT, VT]):
         raise Exception()
 
     def keys(self: "CacheDict[KT, VT]") -> typing.KeysView[KT]:
-        raise Exception()
+        return CacheDictKeysView(self)
 
     def values(self: "CacheDict[KT, VT]") -> typing.ValuesView[VT]:
-        raise Exception()
+        return CacheDictValuesView(self)
 
     def items(self: "CacheDict[KT, VT]") -> typing.ItemsView[KT, VT]:
-        raise Exception()
+        return CacheDictItemsView(self)
 
     @property
     def in_transaction(self: "CacheDict[KT, VT]"):
