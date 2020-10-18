@@ -13,6 +13,7 @@ import parameterized
 from sqlitecaching.dict.dict import (
     CacheDict,
     CacheDictNoSuchKeyException,
+    CacheDictPopItemEmptyException,
     CacheDictReadOnlyException,
     ToCreate,
 )
@@ -458,6 +459,54 @@ class TestCacheDict(SqliteCachingTestBase):
 
                     actual = c.pop(key, missing_value)
                     self.assertIs(actual, missing_value)
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_popitem(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        if extra.preexisting:
+            preexist = extra.preexisting
+            for (key, expected) in preexist.items():
+                with self.subTest(key=key, expected=expected):
+                    if expected is not NOT_PRESENT:
+                        with self.assertRaises(
+                            SqliteCachingException,
+                        ) as raised_context:
+                            _ = c.popitem()
+                        actual: typing.Any = raised_context.exception
+                        self.assertEqual(
+                            actual.category.id,
+                            CacheDictReadOnlyException.category_id,
+                            actual.msg,
+                        )
+                        self.assertEqual(
+                            actual.cause.id,
+                            CacheDictReadOnlyException.id,
+                            actual.msg,
+                        )
+        else:
+            with self.assertRaises(KeyError) as raised_context_keyerror:
+                _ = c.popitem()
+            actual_empty: typing.Any = raised_context_keyerror.exception
+            self.assertIsInstance(actual_empty, SqliteCachingException)
+            self.assertEqual(
+                actual_empty.category.id,
+                CacheDictPopItemEmptyException.category_id,
+                actual_empty.msg,
+            )
+            self.assertEqual(
+                actual_empty.cause.id,
+                CacheDictPopItemEmptyException.id,
+                actual_empty.msg,
+            )
 
     @parameterized.parameterized.expand(success_params)
     def test_readonly_preexist_bool(

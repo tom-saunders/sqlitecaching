@@ -71,6 +71,13 @@ except NameError:
         fmt="method [{method}] is unsupported by CacheDict",
         params=frozenset(["method"]),
     )
+    CacheDictPopItemEmptyException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictPopItemEmptyException",
+        cause_id=7,
+        fmt="table [{table}] is empty, cannot popitem()",
+        params=frozenset(["table"]),
+        additional_excepts=frozenset([KeyError]),
+    )
 
 
 @enum.unique
@@ -342,7 +349,13 @@ class CacheDict(typing.Dict[KT, VT]):
                 return default
 
     def popitem(self: "CacheDict[KT, VT]") -> typing.Tuple[KT, VT]:
-        raise Exception()
+        if not self:
+            raise CacheDictPopItemEmptyException({"table": self.mapping.table_ident})
+        else:
+            last_key = next(reversed(self))
+            last_value = self[last_key]
+            del self[last_key]
+            return (last_key, last_value)
 
     @typing.overload
     def update(
