@@ -117,7 +117,7 @@ class CacheDictItemsView(typing.ItemsView[KT, VT]):
 class CacheDict(typing.Dict[KT, VT]):
     _internally_constructed: typing.ClassVar[typing.Any] = object()
     _raise_on_filtered_sqlite_params: typing.ClassVar[bool] = False
-    __MARKER = object()
+    __MARKER: typing.ClassVar[VT] = object()  # type: ignore
 
     ANON_MEM_PATH: typing.ClassVar[str] = ":memory:"
     ANON_DISK_PATH: typing.ClassVar[str] = ""
@@ -291,9 +291,28 @@ class CacheDict(typing.Dict[KT, VT]):
     def setdefault(
         self: "CacheDict[KT, VT]",
         key: KT,
-        value: typing.Optional[VT] = None,
+        default: VT = __MARKER,
     ) -> VT:
-        raise Exception()
+        try:
+            current: VT = self[key]
+            return current
+        except KeyError:
+            pass
+        value: VT
+        if default is self.__MARKER:
+            try:
+                value = self.mapping.ValueType()
+            except Exception:
+                log.warn(
+                    "Exception from default constr. ValueType [%s]",
+                    self._get_value_type_mapping(),
+                    exc_info=True,
+                )
+                raise
+        else:
+            value = default
+        self[key] = value
+        return value
 
     @typing.overload
     def pop(self: "CacheDict[KT, VT]", key: KT) -> VT:
@@ -654,25 +673,16 @@ class CacheDict(typing.Dict[KT, VT]):
                     "KT": self._get_key_type_mapping(),
                 },
             )
-        if value:
-            if not isinstance(value, self.mapping.ValueType):
-                raise CacheDictValueTypeException(
-                    {
-                        "value": value,
-                        "value_type": type(value),
-                        "VT": self._get_value_type_mapping(),
-                    },
-                )
-        else:
-            try:
-                value = self.mapping.ValueType()
-            except Exception:
-                log.warn(
-                    "Exception from default constr. ValueType [%s]",
-                    self._get_value_type_mapping(),
-                    exc_info=True,
-                )
-                raise
+
+        if not isinstance(value, self.mapping.ValueType):
+            raise CacheDictValueTypeException(
+                {
+                    "value": value,
+                    "value_type": type(value),
+                    "VT": self._get_value_type_mapping(),
+                },
+            )
+
         upsert_stmt = self.mapping.upsert_statement()
         try:
             self._execute(

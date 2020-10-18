@@ -1,3 +1,4 @@
+import dataclasses
 import enum
 import logging
 import os
@@ -9,7 +10,12 @@ from dataclasses import dataclass
 
 import parameterized
 
-from sqlitecaching.dict.dict import CacheDict, CacheDictNoSuchKeyException, ToCreate
+from sqlitecaching.dict.dict import (
+    CacheDict,
+    CacheDictNoSuchKeyException,
+    CacheDictReadOnlyException,
+    ToCreate,
+)
 from sqlitecaching.dict.mapping import CacheDictMapping
 from sqlitecaching.exceptions import SqliteCachingException
 from sqlitecaching.test import SqliteCachingTestBase, TestLevel, test_level
@@ -122,6 +128,19 @@ class TestCacheDict(SqliteCachingTestBase):
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir)
+
+    def create_missing_value(
+        self,
+        mapping: CacheDictMapping[KT, VT],
+        missing_placeholder: bytes = b"MISSING_VALUE",
+    ) -> VT:
+        value_type: typing.Type[VT] = mapping.ValueType
+        value_placeholder_dict = {
+            field.name: missing_placeholder for field in dataclasses.fields(value_type)
+        }
+        value: VT
+        value = value_type(**value_placeholder_dict)  # type: ignore
+        return value
 
     success_params = [
         Def(
@@ -292,6 +311,53 @@ class TestCacheDict(SqliteCachingTestBase):
                 else:
                     missing_value = c.get(key)
                     self.assertIsNone(missing_value)
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_setdefault(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        if extra.preexisting:
+            preexist = extra.preexisting
+        else:
+            preexist = {}
+
+        missing_value = self.create_missing_value(mapping)
+
+        for (key, expected) in preexist.items():
+            with self.subTest(key=key, expected=expected):
+                if expected is not NOT_PRESENT:
+                    actual_value = c.get(key)
+                    self.assertIsNot(actual_value, missing_value)
+                    self.assertEqual(actual_value, expected)
+
+                    actual_value = c.setdefault(key, missing_value)
+                    self.assertIsNot(actual_value, missing_value)
+                    self.assertEqual(actual_value, expected)
+                else:
+                    actual_value = c.get(key)
+                    self.assertIsNone(actual_value)
+
+                    with self.assertRaises(SqliteCachingException) as raised_context:
+                        _ = c.setdefault(key, missing_value)
+                    actual: typing.Any = raised_context.exception
+                    self.assertEqual(
+                        actual.category.id,
+                        CacheDictReadOnlyException.category_id,
+                        actual.msg,
+                    )
+                    self.assertEqual(
+                        actual.cause.id,
+                        CacheDictReadOnlyException.id,
+                        actual.msg,
+                    )
 
     @parameterized.parameterized.expand(success_params)
     def test_readonly_preexist_bool(
