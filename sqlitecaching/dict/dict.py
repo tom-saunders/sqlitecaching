@@ -117,7 +117,7 @@ class CacheDictItemsView(typing.ItemsView[KT, VT]):
 class CacheDict(typing.Dict[KT, VT]):
     _internally_constructed: typing.ClassVar[typing.Any] = object()
     _raise_on_filtered_sqlite_params: typing.ClassVar[bool] = False
-    __MARKER: typing.ClassVar[VT] = object()  # type: ignore
+    __MARKER = object()
 
     ANON_MEM_PATH: typing.ClassVar[str] = ":memory:"
     ANON_DISK_PATH: typing.ClassVar[str] = ""
@@ -291,7 +291,7 @@ class CacheDict(typing.Dict[KT, VT]):
     def setdefault(
         self: "CacheDict[KT, VT]",
         key: KT,
-        default: VT = __MARKER,
+        default: VT = __MARKER,  # type: ignore
     ) -> VT:
         try:
             current: VT = self[key]
@@ -331,7 +331,15 @@ class CacheDict(typing.Dict[KT, VT]):
         key: KT,
         default: T = __MARKER,  # type: ignore
     ) -> typing.Union[VT, T]:
-        raise Exception()
+        try:
+            value = self[key]
+            del self[key]
+            return value
+        except KeyError:
+            if default is self.__MARKER:
+                raise
+            else:
+                return default
 
     def popitem(self: "CacheDict[KT, VT]") -> typing.Tuple[KT, VT]:
         raise Exception()
