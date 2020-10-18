@@ -13,7 +13,7 @@ commands:
                 name: change ownership of parts of the filesystem (!?)
                 command: |
                     sudo chown -R circleci:circleci /usr/local/bin
-                    sudo chown -R circleci:circleci /usr/local/lib/python3.8/site-packages
+                    sudo chown -R circleci:circleci /usr/local/lib/python3.9/site-packages
 
             - run:
                 name: install dependencies
@@ -60,7 +60,7 @@ jobs:
     get_code:
         working_directory: ~/circleci-sqlitecache
         docker:
-            - image: circleci/python:3.8.5
+            - image: circleci/python:3.9.0
         environment:
             PIPENV_VENV_IN_PROJECT: true
             GIT_LFS_SKIP_SMUDGE: 1
@@ -86,7 +86,7 @@ jobs:
     get_lfs:
         working_directory: ~/circleci-sqlitecache
         docker:
-            - image: circleci/python:3.8.5
+            - image: circleci/python:3.9.0
         environment:
             PIPENV_VENV_IN_PROJECT: true
             GIT_LFS_SKIP_SMUDGE: 1
@@ -117,7 +117,7 @@ jobs:
     get_venv:
         working_directory: ~/circleci-sqlitecache
         docker:
-            - image: circleci/python:3.8.5
+            - image: circleci/python:3.9.0
         environment:
             PIPENV_VENV_IN_PROJECT: true
             GIT_LFS_SKIP_SMUDGE: 1
@@ -144,7 +144,7 @@ jobs:
     run_flake8-fixme:
         working_directory: ~/circleci-sqlitecache
         docker:
-            - image: circleci/python:3.8.5
+            - image: circleci/python:3.9.0
         environment:
             PIPENV_VENV_IN_PROJECT: true
             GIT_LFS_SKIP_SMUDGE: 1
@@ -176,7 +176,7 @@ jobs:
     run_flake8:
         working_directory: ~/circleci-sqlitecache
         docker:
-            - image: circleci/python:3.8.5
+            - image: circleci/python:3.9.0
         environment:
             PIPENV_VENV_IN_PROJECT: true
             GIT_LFS_SKIP_SMUDGE: 1
@@ -207,7 +207,7 @@ jobs:
     run_black:
         working_directory: ~/circleci-sqlitecache
         docker:
-            - image: circleci/python:3.8.5
+            - image: circleci/python:3.9.0
         environment:
             PIPENV_VENV_IN_PROJECT: true
             GIT_LFS_SKIP_SMUDGE: 1
@@ -236,7 +236,7 @@ jobs:
     run_tests:
         working_directory: ~/circleci-sqlitecache
         docker:
-            - image: circleci/python:3.8.5
+            - image: circleci/python:3.9.0
         environment:
             PIPENV_VENV_IN_PROJECT: true
             GIT_LFS_SKIP_SMUDGE: 1
@@ -269,7 +269,7 @@ jobs:
     store_artifacts:
         working_directory: ~/circleci-sqlitecache
         docker:
-            - image: circleci/python:3.8.5
+            - image: circleci/python:3.9.0
         environment:
             PIPENV_VENV_IN_PROJECT: true
             GIT_LFS_SKIP_SMUDGE: 1
