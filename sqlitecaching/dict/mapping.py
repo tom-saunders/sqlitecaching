@@ -202,6 +202,18 @@ class CacheDictMapping(typing.Generic[KT, VT]):
         else:
             self.value_columns = {c: ValidSqlType("") for c in self.value_idents}
 
+    def __repr__(self: "CacheDictMapping[KT, VT]") -> str:
+        return (
+            "<{qualname}[{KT}, {VT}](table={table}, keys={keys!r}, values={values!r})>"
+        ).format(
+            qualname=self.__class__.__name__,
+            KT=self.KeyType,
+            VT=self.ValueType,
+            table=self.table_ident,
+            keys=self.key_columns,
+            values=self.value_columns,
+        )
+
     @classmethod
     def _column_info(cls, types: typing.Mapping[str, SqlTypeIn], /) -> ColMapping:
         columns: typing.Dict[ValidIdent, ValidSqlType] = {}

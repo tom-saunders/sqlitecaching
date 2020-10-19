@@ -6,6 +6,7 @@ import shutil
 import sqlite3
 import tempfile
 import typing
+import unittest
 from dataclasses import dataclass
 
 import parameterized
@@ -15,6 +16,7 @@ from sqlitecaching.dict.dict import (
     CacheDictNoSuchKeyException,
     CacheDictPopItemEmptyException,
     CacheDictReadOnlyException,
+    CacheDictUpdateKwargsException,
     ToCreate,
 )
 from sqlitecaching.dict.mapping import CacheDictMapping
@@ -47,6 +49,7 @@ class Extra(typing.NamedTuple):
     sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None
     preexisting: typing.Optional[typing.Mapping[typing.Any, typing.Any]] = None
     actions: typing.Optional[typing.Iterable[Action]] = None
+    updates: typing.Optional[typing.Iterable[Action]] = None
 
 
 class Def(typing.NamedTuple):
@@ -507,6 +510,76 @@ class TestCacheDict(SqliteCachingTestBase):
                 CacheDictPopItemEmptyException.id,
                 actual_empty.msg,
             )
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_update_none(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        c.update()
+
+    @parameterized.parameterized.expand(success_params)
+    @unittest.expectedFailure
+    def test_readonly_update_mapping(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        raise Exception()
+        # c = CacheDict.open_readonly(
+        #     path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+        #     mapping=mapping,
+        #     sqlite_params=extra.sqlite_params,
+        # )
+
+    @parameterized.parameterized.expand(success_params)
+    @unittest.expectedFailure
+    def test_readonly_update_iterable(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        raise Exception()
+        # c = CacheDict.open_readonly(
+        #     path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+        #     mapping=mapping,
+        #     sqlite_params=extra.sqlite_params,
+        # )
+
+    @parameterized.parameterized.expand(success_params)
+    def test_readonly_update_kwargs(
+        self,
+        name: str,
+        mapping: CacheDictMapping,
+        extra: Extra,
+    ):
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        with self.assertRaises(SqliteCachingException) as raised_context:
+            c.update(x="a")
+        actual = raised_context.exception
+        self.assertEqual(
+            actual.category.id,
+            CacheDictUpdateKwargsException.category_id,
+            actual.msg,
+        )
+        self.assertEqual(
+            actual.cause.id,
+            CacheDictUpdateKwargsException.id,
+            actual.msg,
+        )
 
     @parameterized.parameterized.expand(success_params)
     def test_readonly_preexist_bool(

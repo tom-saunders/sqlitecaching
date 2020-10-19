@@ -1,3 +1,4 @@
+import collections.abc
 import dataclasses
 import datetime
 import enum
@@ -41,21 +42,21 @@ except NameError:
     CacheDictKeyTypeException = __CDC.register_cause(
         cause_name=f"{__name__}.CacheDictKeyTypeException",
         cause_id=2,
-        fmt="key [{key}] has incorrect type [{key_type}] (expected KT: [{KT}])",
+        fmt="key [{key!r}] has incorrect type [{key_type}] (expected KT: [{KT}])",
         params=frozenset(["key", "key_type", "KT"]),
         additional_excepts=frozenset([TypeError]),
     )
     CacheDictNoSuchKeyException = __CDC.register_cause(
         cause_name=f"{__name__}.CacheDictNoSuchKeyException",
         cause_id=3,
-        fmt="key [{key}] not present in table [{table}]",
+        fmt="key [{key!r}] not present in table [{table}]",
         params=frozenset(["key", "table"]),
         additional_excepts=frozenset([KeyError]),
     )
     CacheDictValueTypeException = __CDC.register_cause(
         cause_name=f"{__name__}.CacheDictValueTypeException",
         cause_id=4,
-        fmt="value [{value}] has incorrect type [{value_type}] (expected VT: [{VT}]",
+        fmt="value [{value!r}] has incorrect type [{value_type}] (expected VT: [{VT}]",
         params=frozenset(["value", "value_type", "VT"]),
         additional_excepts=frozenset([TypeError]),
     )
@@ -77,6 +78,24 @@ except NameError:
         fmt="table [{table}] is empty, cannot popitem()",
         params=frozenset(["table"]),
         additional_excepts=frozenset([KeyError]),
+    )
+    CacheDictNoneReturnedException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictNoneReturnedException",
+        cause_id=8,
+        fmt=(
+            "None value returned inside response from DB? key: [{key!r}] "
+            "table: [{table}]"
+        ),
+        params=frozenset(["key", "table"]),
+    )
+    CacheDictUpdateKwargsException = __CDC.register_cause(
+        cause_name=f"{__name__}.CacheDictUpdateKwargsException",
+        cause_id=9,
+        fmt=(
+            "**kwargs passed into update() will never reliably work as KT [{KT}] "
+            "!= [{ktype}]"
+        ),
+        params=frozenset(["KT", "ktype"]),
     )
 
 
@@ -121,6 +140,16 @@ class CacheDictItemsView(typing.ItemsView[KT, VT]):
     pass
 
 
+class ReprWrapper(typing.Generic[KT, VT]):
+    _to_wrap: "CacheDict[KT, VT]"
+
+    def __init__(self, to_wrap: "CacheDict[KT, VT]"):
+        self._to_wrap = to_wrap
+
+    def __repr__(self):
+        return repr(self._to_wrap)
+
+
 class CacheDict(typing.Dict[KT, VT]):
     _internally_constructed: typing.ClassVar[typing.Any] = object()
     _raise_on_filtered_sqlite_params: typing.ClassVar[bool] = False
@@ -157,13 +186,6 @@ class CacheDict(typing.Dict[KT, VT]):
         # in an unexpected way.
         super().__init__()
 
-        self._finalize = weakref.finalize(
-            self,
-            self.__class__._finalize_instance,
-            id=id(self),
-            conn=conn,
-        )
-
         self._is_internally_constructed(**kwargs)
 
         self.conn = conn
@@ -189,8 +211,31 @@ class CacheDict(typing.Dict[KT, VT]):
             # but obviously doesn't work for readonly connections
             self.create_table()
 
-        log.info("created [%#0x] conn: [%s]", id(self), self.conn)
+        log.info("created [%r] conn: [%r]", ReprWrapper(self), self.conn)
         self.initialized = True
+
+        self._finalize = weakref.finalize(
+            self,
+            self.__class__._finalize_instance,
+            self_repr=repr(self),
+            conn=conn,
+        )
+
+    def __repr__(self: "CacheDict[KT, VT]") -> str:
+        return (
+            "<{qualname}[{KT}, {VT}](conn={conn!r}, mapping={mapping!r}, "
+            "filepath={filepath!r}, read_only={read_only!r}, "
+            "initialized={initialized!r})>"
+        ).format(
+            qualname=self.__class__.__name__,
+            KT=self.mapping.KeyType,
+            VT=self.mapping.ValueType,
+            conn=self.conn,
+            mapping=self.mapping,
+            filepath=self.filepath,
+            read_only=self.read_only,
+            initialized=self.initialized,
+        )
 
     def create_table(self: "CacheDict[KT, VT]") -> None:
         log.debug("create table [%r]", self)
@@ -311,7 +356,7 @@ class CacheDict(typing.Dict[KT, VT]):
                 value = self.mapping.ValueType()
             except Exception:
                 log.warn(
-                    "Exception from default constr. ValueType [%s]",
+                    "Exception from default constr. ValueType [%r]",
                     self._get_value_type_mapping(),
                     exc_info=True,
                 )
@@ -357,6 +402,23 @@ class CacheDict(typing.Dict[KT, VT]):
             del self[last_key]
             return (last_key, last_value)
 
+    def _update_mapping(
+        self: "CacheDict[KT, VT]",
+        other: typing.Mapping[KT, VT],
+        keys: typing.Iterable[KT],
+        /,
+    ) -> None:
+        for key in keys:
+            self[key] = other[key]
+
+    def _update_iterable(
+        self: "CacheDict[KT, VT]",
+        other: typing.Iterable[typing.Tuple[KT, VT]],
+        /,
+    ) -> None:
+        for (key, value) in other:
+            self[key] = value
+
     @typing.overload
     def update(
         self: "CacheDict[KT, VT]",
@@ -381,14 +443,30 @@ class CacheDict(typing.Dict[KT, VT]):
 
     def update(
         self: "CacheDict[KT, VT]",
-        mapping: typing.Union[
+        other: typing.Union[
             typing.Mapping[KT, VT],
             typing.Iterable[typing.Tuple[KT, VT]],
         ] = (),
         /,
         **kwargs: VT,
     ) -> None:
-        raise Exception()
+        if isinstance(other, collections.abc.Mapping):
+            self._update_mapping(other, other)
+        elif hasattr(other, "keys"):
+            self._update_mapping(other, other.keys())  # type: ignore
+        else:
+            self._update_iterable(other)
+
+        if kwargs:
+            # kwargs: typing.Mapping[str, VT] => str != KT => fail
+            log.error("using **kwargs passed to update() in [%r]", self)
+            key = next(k for k in kwargs)
+            raise CacheDictUpdateKwargsException(
+                {
+                    "KT": self.mapping.KeyType,
+                    "ktype": type(key),
+                },
+            )
 
     def keys(self: "CacheDict[KT, VT]") -> typing.KeysView[KT]:
         return CacheDictKeysView(self)
@@ -415,7 +493,7 @@ class CacheDict(typing.Dict[KT, VT]):
     ) -> bool:
         if should_raise is not None:
             log.warning(
-                "setting [%s]._raise_on_filtered_sqlite_params to [%s]",
+                "setting [%s]._raise_on_filtered_sqlite_params to [%r]",
                 cls.__name__,
                 should_raise,
             )
@@ -476,7 +554,7 @@ class CacheDict(typing.Dict[KT, VT]):
         mapping: CacheDictMapping[KT, VT],
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
     ) -> "CacheDict[KT, VT]":
-        log.info("open readonly")
+        log.info("open readonly: [%s]", path)
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params)
 
         uri_path = f"file:{path}?mode=ro"
@@ -505,7 +583,7 @@ class CacheDict(typing.Dict[KT, VT]):
         create: typing.Optional[ToCreate] = ToCreate.NONE,
         sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None,
     ) -> "CacheDict[KT, VT]":
-        log.info("open readwrite create: [%s]", create)
+        log.info("open readwrite create: [%s] [%r]", path, create)
         cleaned_sqlite_params = cls._cleanup_sqlite_params(sqlite_params)
 
         if create == ToCreate.DATABASE:
@@ -535,7 +613,7 @@ class CacheDict(typing.Dict[KT, VT]):
         *,
         op: str,
     ) -> sqlite3.Cursor:
-        log.debug("_execute [%s] for [%r]", statement, self)
+        log.debug("_execute [%r] for [%r]", statement, ReprWrapper(self))
         if not self.conn:
             log.warning("_execute() with None connection [%r]", self)
             raise CacheDictConnectionClosedException({"op": op})
@@ -580,7 +658,7 @@ class CacheDict(typing.Dict[KT, VT]):
         return 0
 
     def __bool__(self: "CacheDict[KT, VT]") -> bool:
-        log.debug("bool [%s]", repr(self))
+        log.debug("bool [%r]", ReprWrapper(self))
         if not self.initialized:
             log.warning("preinitial, return false")
             return False
@@ -593,7 +671,7 @@ class CacheDict(typing.Dict[KT, VT]):
         return False
 
     def __delitem__(self: "CacheDict[KT, VT]", key: KT, /) -> None:
-        log.debug("delete [%#0x] key: [%s]", id(self), key)
+        log.debug("delete [%r] key: [%r]", ReprWrapper(self), key)
         if self.read_only:
             raise CacheDictReadOnlyException(
                 {
@@ -613,9 +691,9 @@ class CacheDict(typing.Dict[KT, VT]):
             _ = self.__getitem__(key)
         except Exception:
             log.debug(
-                "exception getting [%s], cannot delete in [%#0x]",
+                "exception getting [%r], cannot delete in [%r]",
                 key,
-                id(self),
+                ReprWrapper(self),
                 exc_info=True,
             )
             raise
@@ -624,7 +702,7 @@ class CacheDict(typing.Dict[KT, VT]):
             self._execute(remove_stmt, dataclasses.astuple(key), op="remove")
 
     def __contains__(self: "CacheDict[KT, VT]", key: object, /) -> bool:
-        log.debug("get [%#0x] key: [%s]", id(self), key)
+        log.debug("get [%r] key: [%r]", ReprWrapper(self), key)
         if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
                 {
@@ -643,7 +721,7 @@ class CacheDict(typing.Dict[KT, VT]):
         return False
 
     def __getitem__(self: "CacheDict[KT, VT]", key: KT, /) -> VT:
-        log.debug("get [%#0x] key: [%s]", id(self), key)
+        log.debug("get [%r] key: [%r]", ReprWrapper(self), key)
         if not isinstance(key, self.mapping.KeyType):
             raise CacheDictKeyTypeException(
                 {
@@ -659,9 +737,12 @@ class CacheDict(typing.Dict[KT, VT]):
             raise CacheDictNoSuchKeyException(
                 {"key": key, "table": self.mapping.table_ident},
             )
-        elif not res.value:
-            raise Exception()
-        return res.value
+        elif res.value is None:
+            raise CacheDictNoneReturnedException(
+                {"key": key, "table": self.mapping.table_ident},
+            )
+        else:
+            return res.value
 
     def __iter__(self: "CacheDict[KT, VT]") -> typing.Iterator[KT]:
         keys_stmt = self.mapping.keys_statement()
@@ -678,7 +759,7 @@ class CacheDict(typing.Dict[KT, VT]):
                     key = None
 
     def __setitem__(self: "CacheDict[KT, VT]", key: KT, value: VT, /) -> None:
-        log.debug("set [%#0x] key: [%s] value: [%s]", id(self), key, value)
+        log.debug("set [%r] key: [%r] value: [%r]", ReprWrapper(self), key, value)
         if self.read_only:
             raise CacheDictReadOnlyException(
                 {
@@ -737,17 +818,17 @@ class CacheDict(typing.Dict[KT, VT]):
     def _finalize_instance(
         cls: typing.Type["CacheDict[KT, VT]"],
         *,
-        id: int,
+        self_repr: str,
         conn: sqlite3.Connection,
     ) -> None:
-        log.info("_finalize_instance [%#0x] conn: [%s]", id, conn)
+        log.info("_finalize_instance [%s] conn: [%r]", self_repr, conn)
         try:
             conn.close()
         except Exception:  # pragma: no cover
             # We don't really care what the exception is as we cannot do
             # anything about it. If it's rethrown it will just be output
             # to stderr
-            log.error("exception when closing conn: [%s]", conn, exc_info=True)
+            log.error("exception when closing conn: [%r]", conn, exc_info=True)
 
     def _get_key_type_mapping(
         self: "CacheDict[KT, VT]",
@@ -794,7 +875,7 @@ class CacheDict(typing.Dict[KT, VT]):
                 log.warning(
                     (
                         "unsupported (by sqlitecaching) sqlite parameter [%s] "
-                        "found with value [%s] - removing"
+                        "found with value [%r] - removing"
                     ),
                     param,
                     value,
