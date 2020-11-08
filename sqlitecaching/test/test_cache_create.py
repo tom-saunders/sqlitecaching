@@ -6,7 +6,6 @@ import shutil
 import sqlite3
 import tempfile
 import typing
-import unittest
 from dataclasses import dataclass
 
 import parameterized
@@ -38,24 +37,47 @@ class ActionType(enum.Enum):
     DEL = enum.auto()
 
 
-class Action(typing.NamedTuple):
+@dataclass(frozen=True)
+class Action(typing.Generic[KT, VT]):
     type: ActionType
-    result: typing.Optional[typing.Mapping[typing.Any, typing.Any]]
-    key: typing.Optional[typing.Any] = None
-    value: typing.Optional[typing.Any] = None
+    result: typing.Mapping[KT, VT] = dataclasses.field(default_factory=dict)
+    payload: typing.Optional[typing.Tuple[KT, typing.Optional[VT]]] = None
+
+    def __iter__(self):
+        return (getattr(self, field.name) for field in dataclasses.fields(self))
 
 
-class Extra(typing.NamedTuple):
+@dataclass(frozen=True)
+class NotPresent:
+    sentinel = object()
+
+
+NOT_PRESENT = NotPresent()
+
+
+@dataclass(frozen=True)
+class Extra(typing.Generic[KT, VT]):
     sqlite_params: typing.Optional[typing.Mapping[str, typing.Any]] = None
-    preexisting: typing.Optional[typing.Mapping[typing.Any, typing.Any]] = None
-    actions: typing.Optional[typing.Iterable[Action]] = None
-    updates: typing.Optional[typing.Iterable[Action]] = None
+    preexisting: typing.Optional[
+        typing.Mapping[KT, typing.Union[VT, NotPresent]]
+    ] = None
+    actions: typing.Iterable[Action] = dataclasses.field(default_factory=list)
+    updates: typing.Iterable[typing.Tuple[KT, VT]] = dataclasses.field(
+        default_factory=list,
+    )
+
+    def __iter__(self):
+        return (getattr(self, field.name) for field in dataclasses.fields(self))
 
 
-class Def(typing.NamedTuple):
+@dataclass(frozen=True)
+class Def(typing.Generic[KT, VT]):
     name: str
-    mapping: CacheDictMapping
-    extra: Extra
+    mapping: CacheDictMapping[KT, VT]
+    extra: Extra[KT, VT]
+
+    def __iter__(self):
+        return (getattr(self, field.name) for field in dataclasses.fields(self))
 
 
 @dataclass(frozen=True)
@@ -85,21 +107,21 @@ class Empty:
     pass
 
 
-empty = CacheDictMapping(  # noqa: N816
+empty = CacheDictMapping[A, B](  # noqa: N816
     table="empty",
     key_type=A,
     key_types=A("A"),
     value_type=B,
     value_types=B("B"),
 )
-minimal = CacheDictMapping(  # noqa: N816
+minimal = CacheDictMapping[A, B](  # noqa: N816
     table="minimal",
     key_type=A,
     key_types=A("A"),
     value_type=B,
     value_types=B("B"),
 )
-minimal_two = CacheDictMapping(  # noqa: N816
+minimal_two = CacheDictMapping[AB, CD](  # noqa: N816
     table="minimal_two",
     key_type=AB,
     key_types=AB("A", "B"),
@@ -107,15 +129,13 @@ minimal_two = CacheDictMapping(  # noqa: N816
     value_types=CD("C", "D"),
 )
 
-minimal_three = CacheDictMapping(  # noqa: N816
+minimal_three = CacheDictMapping[A, Empty](  # noqa: N816
     table="minimal_three",
     key_type=A,
     key_types=A("A"),
     value_type=Empty,
     value_types=Empty(),
 )
-
-NOT_PRESENT = "NOT_PRESENT_MARKER"
 
 
 @test_level(TestLevel.PRE_COMMIT)
@@ -133,7 +153,7 @@ class TestCacheDict(SqliteCachingTestBase):
     def tearDown(self):
         shutil.rmtree(self.tmp_dir)
 
-    def create_missing_value(
+    def _create_missing_value(
         self,
         mapping: CacheDictMapping[KT, VT],
         missing_placeholder: bytes = b"MISSING_VALUE",
@@ -147,45 +167,63 @@ class TestCacheDict(SqliteCachingTestBase):
         return value
 
     success_params = [
-        Def(
+        Def[A, B](
             name="empty",
             mapping=empty,
-            extra=Extra(preexisting={}, actions=[]),
+            extra=Extra[A, B](
+                preexisting={},
+                actions=[],
+                updates=[
+                    (A("A"), B("B")),
+                    (A("B"), B("A")),
+                ],
+            ),
         ),
-        Def(
+        Def[A, B](
             name="minimal",
             mapping=minimal,
-            extra=Extra(
+            extra=Extra[A, B](
                 preexisting={
                     A("a"): B("b"),
                     A("b"): B("a"),
                     A("f"): NOT_PRESENT,
                 },
                 actions=[],
+                updates=[
+                    (A("c"), B("c")),
+                    (A("d"), B("d")),
+                ],
             ),
         ),
-        Def(
+        Def[AB, CD](
             name="minimal",
             mapping=minimal_two,
-            extra=Extra(
+            extra=Extra[AB, CD](
                 preexisting={
                     AB("a", "b"): CD("c", "d"),
                     AB("b", "a"): CD("d", "c"),
                     AB("a", "a"): NOT_PRESENT,
                 },
                 actions=[],
+                updates=[
+                    (AB("c", "d"), CD("a", "b")),
+                    (AB("d", "c"), CD("b", "a")),
+                ],
             ),
         ),
-        Def(
+        Def[A, Empty](
             name="minimal",
             mapping=minimal_three,
-            extra=Extra(
+            extra=Extra[A, Empty](
                 preexisting={
                     A("a"): Empty(),
                     A("b"): Empty(),
                     A("c"): NOT_PRESENT,
                 },
                 actions=[],
+                updates=[
+                    (A("c"), Empty()),
+                ],
             ),
         ),
     ]
@@ -333,7 +371,7 @@ class TestCacheDict(SqliteCachingTestBase):
         else:
             preexist = {}
 
-        missing_value = self.create_missing_value(mapping)
+        missing_value = self._create_missing_value(mapping)
 
         for (key, expected) in preexist.items():
             with self.subTest(key=key, expected=expected):
@@ -435,7 +473,7 @@ class TestCacheDict(SqliteCachingTestBase):
         else:
             preexist = {}
 
-        missing_value = self.create_missing_value(mapping)
+        missing_value = self._create_missing_value(mapping)
 
         for (key, expected) in preexist.items():
             with self.subTest(key=key, expected=expected):
@@ -526,34 +564,56 @@ class TestCacheDict(SqliteCachingTestBase):
         c.update()
 
     @parameterized.parameterized.expand(success_params)
-    @unittest.expectedFailure
     def test_readonly_update_mapping(
         self,
         name: str,
         mapping: CacheDictMapping,
         extra: Extra,
     ):
-        raise Exception()
-        # c = CacheDict.open_readonly(
-        #     path=f"{self.tmp_dir}/{name}.readonly.sqlite",
-        #     mapping=mapping,
-        #     sqlite_params=extra.sqlite_params,
-        # )
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        with self.assertRaises(SqliteCachingException) as raised_context:
+            c.update({k: v for k, v in extra.updates})
+        actual: typing.Any = raised_context.exception
+        self.assertEqual(
+            actual.category.id,
+            CacheDictReadOnlyException.category_id,
+            actual.msg,
+        )
+        self.assertEqual(
+            actual.cause.id,
+            CacheDictReadOnlyException.id,
+            actual.msg,
+        )
 
     @parameterized.parameterized.expand(success_params)
-    @unittest.expectedFailure
     def test_readonly_update_iterable(
         self,
         name: str,
         mapping: CacheDictMapping,
         extra: Extra,
     ):
-        raise Exception()
-        # c = CacheDict.open_readonly(
-        #     path=f"{self.tmp_dir}/{name}.readonly.sqlite",
-        #     mapping=mapping,
-        #     sqlite_params=extra.sqlite_params,
-        # )
+        c = CacheDict.open_readonly(
+            path=f"{self.tmp_dir}/{name}.readonly.sqlite",
+            mapping=mapping,
+            sqlite_params=extra.sqlite_params,
+        )
+        with self.assertRaises(SqliteCachingException) as raised_context:
+            c.update(extra.updates)
+        actual: typing.Any = raised_context.exception
+        self.assertEqual(
+            actual.category.id,
+            CacheDictReadOnlyException.category_id,
+            actual.msg,
+        )
+        self.assertEqual(
+            actual.cause.id,
+            CacheDictReadOnlyException.id,
+            actual.msg,
+        )
 
     @parameterized.parameterized.expand(success_params)
     def test_readonly_update_kwargs(
