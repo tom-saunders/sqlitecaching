@@ -5,7 +5,7 @@ verify_ssl = true
 
 [dev-packages]
 unittest-xml-reporting = "~=3.0"
-flake8 = "~=3.8"
+flake8 = "~=3.9"
 flake8-junit-report = "~=2.1"
 pre-commit = "~=2.9"
 black = "==20.8b1"
