@@ -7,7 +7,7 @@ verify_ssl = true
 unittest-xml-reporting = "~=3.0"
 flake8 = "~=3.8"
 flake8-junit-report = "~=2.1"
-pre-commit = "~=2.9"
+pre-commit = "~=2.14"
 black = "==20.8b1"
 isort = "~=5.6"
 parameterized = "~=0.7"
